@@ -4,8 +4,7 @@ import numpy as np
 from scipy.integrate import solve_ivp
 
 class StateVector():
-    def __init__(self, zeta, eta, theta, is_ugv):
-        self.is_ugv = is_ugv # uav assumed when false
+    def __init__(self, zeta, eta, theta):
         self.state = np.array([zeta, eta, theta])
 
 
@@ -16,11 +15,9 @@ class UGV():
     
     def propagate(self, t_evals, u):
 
-        if self.is_ugv:
-            sol = solve_ivp(state_deriv_ugv, (min(t_evals), max(t_evals) + 0.1), self.state.state, t_eval=t_evals, args=(u, self.l))
-        else:
-            #sol = solve_ivp(state_deriv_uav, (min(t_evals), max(t_evals) + 0.1), t_eval=t_evals, args= u)
-            print('hi')
+        sol = solve_ivp(state_deriv_ugv, (min(t_evals), max(t_evals) + 0.1), self.state.state, t_eval=t_evals, args=(u, self.l))
+
+        return sol
 
         
 def state_deriv_ugv(t, y, u, l):
