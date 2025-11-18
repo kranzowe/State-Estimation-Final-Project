@@ -5,15 +5,15 @@ import math
 
 from scipy.integrate import solve_ivp
 
-MAX_VELOCITY = 10
+MAX_VELOCITY = 20
 MIN_VELOCITY = 10
-MAX_TURN_RATE = math.pi() / 6
-MIN_TURN_RATE = -math.pi() / 6
+MAX_TURN_RATE = math.pi / 6
+MIN_TURN_RATE = -math.pi / 6
 
 class Dynamical_UAV():
 
     #current state of the uav
-    current_state = np.zeros([3,1])
+    current_state = np.zeros([3])
 
     def __init__(self, initial_state):
         
@@ -57,10 +57,10 @@ class Dynamical_UAV():
         #   dt = scalar propagation time
 
         #solve the ivp 
-        result = solve_ivp(self.get_nl_d_state, [0, dt], self.current_state, args=tuple(control))    
+        result = solve_ivp(self.get_nl_d_state, [0, dt], self.current_state, args=[control])    
 
         #update the current system state
-        self.current_state = result.y[-1]
+        self.current_state = [result.y[0][-1], result.y[1][-1], result.y[2][-1]]
 
 
     def _get_current_jacobian(self, control):
@@ -117,11 +117,11 @@ class Dynamical_UAV():
         #Returns the d-state vector for the "current state" and given control vector
         # [dE, dN, dT]
 
-        d_state = np.zeros([3,1])
+        d_state = np.zeros([3])
 
         d_state[0] = control[0] * math.cos(self.current_state[2])
         d_state[1] = control[0] * math.sin(self.current_state[2])
-        d_state[2] = 0
+        d_state[2] = control[1]
 
         return d_state
     
