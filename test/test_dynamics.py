@@ -17,4 +17,5 @@ def test_propagation():
     control = np.array([0.1, 0.1])
     sol = ugv.propagate(t_evals, control)
 
+
     
