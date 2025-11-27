@@ -71,7 +71,7 @@ class CombinedSystem():
             self.current_state = state
 
         if(control is None):
-            control = np.zeros(2,1)
+            control = np.zeros(4,1)
 
         #wrap the nl d_state function to enforce limits
         if(control[0] > MAX_UGV_VELOCITY):
@@ -116,7 +116,14 @@ class CombinedSystem():
         #Returns the d-state vector for the "current state" and given control vector
         # [dE, dN, dT]
 
-        d_state_uav = self.uav._get_nl_d_state(control)
-        d_state_ugv = self.ugv._get_nl_d_state(control)
+        control_ugv = control[0:2]  # [vg, phi_g]
+        control_uav = control[2:4]  # [va, omega_a]
+        
+        # Update individual vehicle states from combined state
+        self.ugv.current_state = self.current_state[0:3]
+        self.uav.current_state = self.current_state[3:6]
+
+        d_state_uav = self.uav._get_nl_d_state(control_ugv)
+        d_state_ugv = self.ugv._get_nl_d_state(control_uav)
 
         return np.hstack((d_state_ugv, d_state_uav))
