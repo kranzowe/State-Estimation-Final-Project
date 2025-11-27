@@ -5,17 +5,18 @@ import math
 
 from scipy.integrate import solve_ivp
 
-MAX_VELOCITY = 20
-MIN_VELOCITY = 10
-MAX_TURN_RATE = math.pi / 6
-MIN_TURN_RATE = -math.pi / 6
+MAX_VELOCITY = 3
+MIN_VELOCITY = 0
+MAX_STEER_ANGLE = 5*math.pi / 12
+MIN_STEER_ANGLE = -5*math.pi / 12
 
-class Dynamical_UAV():
+class Dynamical_UGV():
 
     def __init__(self, initial_state):
         
         #set the initial state
         self.current_state = initial_state
+        self.L = 0.5
 
     def get_current_jacobian(self, control):
 
@@ -29,20 +30,20 @@ class Dynamical_UAV():
             print(f"Control Velocity Exceeds Bounds: {control[0]}" )
             control[0] = MIN_VELOCITY
 
-        if(control[1] > MAX_TURN_RATE):
+        if(control[1] > MAX_STEER_ANGLE):
             print(f"Control Velocity Exceeds Bounds: {control[1]}" )
-            control[1] = MAX_TURN_RATE
+            control[1] = MAX_STEER_ANGLE
 
-        elif(control[1] < MIN_TURN_RATE):
+        elif(control[1] < MIN_STEER_ANGLE):
             print(f"Control Velocity Exceeds Bounds: {control[1]}" )
-            control[1] = MIN_TURN_RATE
+            control[1] = MIN_STEER_ANGLE
 
         return self._get_current_jacobian(control)
 
     #propagate the current timestep by a timestep dt using the control input control
     def step_jacobian_propagation(self, control, dt):
         #Params:
-        #   controls = [va, phi_a]
+        #   controls = [vg, phi_g]
         #   dt = scalar intended timestep
 
         solve_ivp() 
@@ -50,7 +51,7 @@ class Dynamical_UAV():
     #propagate the current timestep by a timestep dt using the control input control
     def step_nl_propagation(self, control, dt):
         #Params:
-        #   controls = [va, phi_a]
+        #   controls = [vg, phi_g]
         #   dt = scalar propagation time
 
         #solve the ivp 
@@ -68,9 +69,9 @@ class Dynamical_UAV():
     def _get_current_jacobian(self, control):
 
         #Params:
-        #   controls = [va, phi_a]
-        #Returns the linearized jacabian for the UAV
-        #[dE, dN, dT] by [dE, dN, dT, dVa, dPhi]
+        #   controls = [vg, phi_g]
+        #Returns the linearized jacabian for the UGV
+        #[dE, dN, dT] by [dE, dN, dT, dVg, dPhi]
         jac = np.zeros([3,5])
 
         jac[0][2] = -math.sin(self.current_state[2]) * control[0]
@@ -101,13 +102,13 @@ class Dynamical_UAV():
             print(f"Control Velocity Exceeds Bounds: {control[0]}" )
             control[0] = MIN_VELOCITY
 
-        if(control[1] > MAX_TURN_RATE):
+        if(control[1] > MAX_STEER_ANGLE):
             print(f"Control Velocity Exceeds Bounds: {control[1]}" )
-            control[1] = MAX_TURN_RATE
+            control[1] = MAX_STEER_ANGLE
 
-        elif(control[1] < MIN_TURN_RATE):
+        elif(control[1] < MIN_STEER_ANGLE):
             print(f"Control Velocity Exceeds Bounds: {control[1]}" )
-            control[1] = MIN_TURN_RATE
+            control[1] = MIN_STEER_ANGLE
 
         return self._get_nl_d_state(control)
 
@@ -115,7 +116,7 @@ class Dynamical_UAV():
     def _get_nl_d_state(self, control):
         
         #Params:
-        #   controls = [va, phi_a]
+        #   controls = [vg, phi_g]
         #Returns the d-state vector for the "current state" and given control vector
         # [dE, dN, dT]
 
@@ -123,7 +124,7 @@ class Dynamical_UAV():
 
         d_state[0] = control[0] * math.cos(self.current_state[2])
         d_state[1] = control[0] * math.sin(self.current_state[2])
-        d_state[2] = control[1]
+        d_state[2] = (control[0]/self.L) * math.tan(control[1])
 
         return d_state
     
