@@ -4,29 +4,19 @@ import os
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 import numpy as np
-import src.uav_dynamics as uav_dynamics
+import src.ugv_dynamics as ugv_dynamics
 import math
 
 import matplotlib.pyplot as plt
 
-def test_nl_prop():
 
-    init_state = [0,0,0]
-    control_vector = [12, math.pi / 12]
-    step = 3
-
-    uav = uav_dynamics.Dynamical_UAV(init_state)
-    uav.step_nl_propagation(control_vector, step)
-
-    print(uav.current_state)
-
-def test_nl_uav_prop_plots_progress_report_1():
+def test_nl_ugv_prop_plots_progress_report_1():
     """gen the plots as shown in the pdf"""
-    preturb_x0 = np.array([0, 0, 0.1])
-    x0 = np.array([-60, 0, -math.pi/2]) + preturb_x0
-    control = np.array([12, math.pi / 25])
+    perturb_x0 = np.array([0, 1, 0])
+    x0 = np.array([10, 0, math.pi/2]) + perturb_x0
+    control = np.array([2, -math.pi / 18])
 
-    uav = uav_dynamics.Dynamical_UAV(x0)
+    ugv = ugv_dynamics.Dynamical_UGV(x0)
 
     dt = 0.1
     t = 0
@@ -34,8 +24,8 @@ def test_nl_uav_prop_plots_progress_report_1():
     ephemeris = [x0]
     times = [t]
     while t <=100:
-        uav.step_nl_propagation(control, dt)
-        ephemeris.append(uav.current_state)
+        ugv.step_nl_propagation(control, dt)
+        ephemeris.append(ugv.current_state)
         t += dt
         times.append(t)
 
