@@ -23,9 +23,30 @@ class CombinedSystem():
         self.ugv = ugv
         self.current_state = np.hstack((ugv.current_state, uav.current_state))
 
-    def get_current_jacobian(self, control):
+    def get_dt_state_transition_matrices(self, dt, control):
 
-        return
+        F = np.zeros([6,6])
+        G = np.zeros([6,4])
+
+        f_uav, g_uav = self.uav.state_dt_transition_matrix(dt, control[0:2])
+        f_ugv, g_ugv = self.ugv.state_dt_transition_matrix(dt, control[2:4])
+
+        F[0:3, 0:3] = f_ugv
+        F[3:6, 3:6] = f_uav
+        G[0:3, 0:2] = g_ugv
+        G[3:6, 2:4] = g_uav
+
+        return F, G
+    
+    def step_dt_states(self, F, G, control):
+
+        self.ugv.step_dt_system(F[0:3, 0:3], G[0:3, 0:2], control[0:2])
+        self.uav.step_dt_system(F[3:6, 3:6], G[3:6, 2:4], control[0:2])
+        
+        #update the current system state
+        self.current_state = np.hstack([self.ugv.current_state, self.uav.current_state])
+
+
 
     #propagate the current timestep by a timestep dt using the control input control
     def step_jacobian_propagation(self, control, dt):
@@ -159,3 +180,4 @@ class CombinedSystem():
         d_state_ugv = self.ugv._get_nl_d_state(control_ugv)
 
         return np.hstack((d_state_ugv, d_state_uav))
+    
