@@ -44,17 +44,19 @@ class CombinedSystem():
         #solve the ivp 
         result = solve_ivp(self.get_nl_d_state, [0, dt], self.current_state, args=(control,))    
 
+        print(control)
 
-        theta_g= result.y[2][-1]
+        theta_g = result.y[2][-1]
         if theta_g > math.pi:
             theta_g -= 2*math.pi
         elif theta_g < -math.pi:
             theta_g += 2*math.pi
-        theta_a= result.y[5][-1]
+        theta_a = result.y[5][-1]
         if theta_a > math.pi:
             theta_a -= 2*math.pi
         elif theta_a < -math.pi:
             theta_a += 2*math.pi
+
         #update the current system state
         self.current_state = [result.y[0][-1], result.y[1][-1], theta_g, result.y[3][-1], result.y[4][-1], theta_a]
 
@@ -123,7 +125,8 @@ class CombinedSystem():
         self.ugv.current_state = self.current_state[0:3]
         self.uav.current_state = self.current_state[3:6]
 
-        d_state_uav = self.uav._get_nl_d_state(control_ugv)
-        d_state_ugv = self.ugv._get_nl_d_state(control_uav)
+        #step the vehicles with the corrected controls
+        d_state_uav = self.uav._get_nl_d_state(control_uav)
+        d_state_ugv = self.ugv._get_nl_d_state(control_ugv)
 
         return np.hstack((d_state_ugv, d_state_uav))
