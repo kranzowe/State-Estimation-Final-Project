@@ -44,8 +44,6 @@ class CombinedSystem():
         #solve the ivp 
         result = solve_ivp(self.get_nl_d_state, [0, dt], self.current_state, args=(control,))    
 
-        print(control)
-
         theta_g = result.y[2][-1]
         if theta_g > math.pi:
             theta_g -= 2*math.pi
@@ -59,6 +57,37 @@ class CombinedSystem():
 
         #update the current system state
         self.current_state = [result.y[0][-1], result.y[1][-1], theta_g, result.y[3][-1], result.y[4][-1], theta_a]
+
+
+    def create_measurements_from_states(self):
+
+        measurement_array = np.zeros([5])
+
+        #bearing to the auv to the ugv
+        measurement_array[0] = math.atan2(self.current_state[4] - self.current_state[1], self.current_state[3] - self.current_state[0]) - self.current_state[2]
+
+        #positional distance
+        measurement_array[1] = math.sqrt((self.current_state[0] - self.current_state[3]) ** 2 + (self.current_state[1] - self.current_state[4]) ** 2)
+
+        #bearing from the auv to the ugv
+        measurement_array[2] = math.atan2(self.current_state[1] - self.current_state[4], self.current_state[0] - self.current_state[3]) - self.current_state[5]
+
+        #uav position
+        measurement_array[4] = self.current_state[4]
+        measurement_array[3] = self.current_state[3]
+
+        #normalize angles
+        if measurement_array[0] > math.pi:
+            measurement_array[0] -= 2*math.pi
+        elif measurement_array[0] < -math.pi:
+            measurement_array[0] += 2*math.pi
+        if measurement_array[2] > math.pi:
+            measurement_array[2] -= 2*math.pi
+        elif measurement_array[2] < -math.pi:
+            measurement_array[2] += 2*math.pi
+
+        return measurement_array
+
 
 
     def _get_current_jacobian(self, control):
