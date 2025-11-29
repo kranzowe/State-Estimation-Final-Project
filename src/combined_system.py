@@ -23,13 +23,13 @@ class CombinedSystem():
         self.ugv = ugv
         self.current_state = np.hstack((ugv.current_state, uav.current_state))
 
-    def get_dt_state_transition_matrices(self, dt, control):
+    def get_dt_state_transition_matrices(self, dt, x_nom, control_nom):
 
         F = np.zeros([6,6])
         G = np.zeros([6,4])
 
-        f_uav, g_uav = self.uav.state_dt_transition_matrix(dt, control[0:2])
-        f_ugv, g_ugv = self.ugv.state_dt_transition_matrix(dt, control[2:4])
+        f_ugv, g_ugv = self.ugv.state_dt_transition_matrix(dt, x_nom[0:3], control_nom[0:2])
+        f_uav, g_uav = self.uav.state_dt_transition_matrix(dt, x_nom[3:6], control_nom[2:4])
 
         F[0:3, 0:3] = f_ugv
         F[3:6, 3:6] = f_uav
@@ -38,10 +38,10 @@ class CombinedSystem():
 
         return F, G
     
-    def step_dt_states(self, F, G, control):
+    def step_dt_states(self, F, G, control_perturb):
 
-        self.ugv.step_dt_system(F[0:3, 0:3], G[0:3, 0:2], control[0:2])
-        self.uav.step_dt_system(F[3:6, 3:6], G[3:6, 2:4], control[0:2])
+        self.ugv.step_dt_system(F[0:3, 0:3], G[0:3, 0:2], control_perturb[0:2])
+        self.uav.step_dt_system(F[3:6, 3:6], G[3:6, 2:4], control_perturb[2:4])
         
         #update the current system state
         self.current_state = np.hstack([self.ugv.current_state, self.uav.current_state])

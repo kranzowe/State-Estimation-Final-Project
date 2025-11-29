@@ -20,7 +20,30 @@ class Dynamical_UGV():
         self.current_state = initial_state
         self.L = 0.5
 
-    def get_current_jacobian(self, control):
+    def update_nominal_state(self, t, x_0, control_nom):
+        # get nominal state assuming constant turn
+        # params:
+        #   t = current time
+        #   x_0 = [xi_0, eta_0, theta_0]
+        #   control_nom = v_g and phi, constants for nominal trajectory
+        v_g = control_nom[0]
+        phi = control_nom[1]
+        omega = v_g / self.L * np.tan(phi)
+        theta = x_0[2] + omega * t
+        xi = x_0[0] + v_g / omega * (np.sin(theta) - np.sin(x_0[2]))
+        eta = x_0[1] - v_g / omega * (np.cos(theta) - np.cos(x_0[2]))
+
+        if theta > math.pi:
+            while theta > math.pi:
+                theta -= 2*math.pi
+        elif theta < -math.pi:
+            while theta < -math.pi:
+                theta += 2*math.pi
+
+        nom_state = np.array([xi, eta, theta])
+        return nom_state
+
+    def get_current_jacobian(self, x_nom, control):
 
         #wrap the get jacobian function to enforce limits
 
@@ -40,36 +63,31 @@ class Dynamical_UGV():
             print(f"Control Velocity Exceeds Bounds: {control[1]}" )
             control[1] = MIN_STEER_ANGLE
 
-        return self._get_current_jacobian(control)
+        return self._get_current_jacobian(x_nom, control)
 
-    def step_dt_system(self, F, G, control):
+    def step_dt_system(self, F, G, control_perturb):
 
-        self.current_state = F @ self.current_state + G @ control
+        self.current_state = F @ self.current_state + G @ control_perturb
 
         if  self.current_state[2]  > math.pi:
              self.current_state[2] -= 2*math.pi
         elif  self.current_state[2] < -math.pi:
              self.current_state[2] += 2*math.pi
 
-    def state_dt_transition_matrix(self, dt, control, state=None):
+    def state_dt_transition_matrix(self, dt, x_nom, control_nom, state=None):
 
         if not (state == None):
             self.current_state = state
 
-        A_hat = np.zeros([5,5])
-        A_hat[0:3, :] = self.get_current_jacobian(control)
+        jac = self.get_current_jacobian(x_nom, control_nom)
 
-        F_hat = expm(dt * A_hat)
+        A_nom = jac[0:3,0:3]
+        B_nom = jac[0:3,3:5]
+        # euler approx
+        F_k = np.eye(3,3) + dt*A_nom
+        G_k = dt*B_nom
 
-        return F_hat[0:3, 0:3], F_hat[0:3, 3:5]
-
-    #propagate the current timestep by a timestep dt using the control input control
-    def step_jacobian_propagation(self, control, dt):
-        #Params:
-        #   controls = [vg, phi_g]
-        #   dt = scalar intended timestep
-
-        solve_ivp() 
+        return F_k, G_k
 
     #propagate the current timestep by a timestep dt using the control input control
     def step_nl_propagation(self, control, dt):
@@ -89,7 +107,7 @@ class Dynamical_UGV():
         self.current_state = [result.y[0][-1], result.y[1][-1], theta]
 
 
-    def _get_current_jacobian(self, control):
+    def _get_current_jacobian(self, x_nom, control):
 
         #Params:
         #   controls = [vg, phi_g]
@@ -97,10 +115,10 @@ class Dynamical_UGV():
         #[dE, dN, dT] by [dE, dN, dT, dVg, dPhi]
         jac = np.zeros([3,5])
 
-        jac[0][2] = -math.sin(self.current_state[2]) * control[0]
-        jac[1][2] = math.cos(self.current_state[2]) * control[0]
-        jac[0][3] = math.cos(self.current_state[2])
-        jac[1][3] = math.sin(self.current_state[2])
+        jac[0][2] = -math.sin(x_nom[2]) * control[0]
+        jac[1][2] = math.cos(x_nom[2]) * control[0]
+        jac[0][3] = math.cos(x_nom[2])
+        jac[1][3] = math.sin(x_nom[2])
         jac[2][3] = math.tan(control[1]) / self.L
         jac[2][4] = control[0] * (math.tan(control[1])**2 + 1) / self.L
 
