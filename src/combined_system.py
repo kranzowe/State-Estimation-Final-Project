@@ -109,6 +109,64 @@ class CombinedSystem():
 
         return measurement_array
 
+    def create_dt_measurements(self, x_nom):
+        full_state = x_nom
+        measurement_nom_array = np.zeros([5])
+
+        # bearing to the auv to the ugv
+        measurement_nom_array[0] = math.atan2(full_state[4] - full_state[1], full_state[3] - full_state[0]) - full_state[2]
+
+        # positional distance
+        measurement_nom_array[1] = math.sqrt((full_state[0] - full_state[3]) ** 2 + (full_state[1] - full_state[4]) ** 2)
+
+        # bearing from the auv to the ugv
+        measurement_nom_array[2] = math.atan2(full_state[1] - full_state[4], full_state[0] - full_state[3]) - full_state[5]
+
+        # uav position
+        measurement_nom_array[4] = full_state[4]
+        measurement_nom_array[3] = full_state[3]
+
+        # normalize angles
+        if measurement_nom_array[0] > math.pi:
+            measurement_nom_array[0] -= 2 * math.pi
+        elif measurement_nom_array[0] < -math.pi:
+            measurement_nom_array[0] += 2 * math.pi
+        if measurement_nom_array[2] > math.pi:
+            measurement_nom_array[2] -= 2 * math.pi
+        elif measurement_nom_array[2] < -math.pi:
+            measurement_nom_array[2] += 2 * math.pi
+
+        # simplifying relations
+        dx = x_nom[3] - x_nom[0]
+        dy = x_nom[4] - x_nom[1]
+        rho = np.sqrt(dx**2 + dy**2)
+        rho2 = dx**2 + dy**2
+
+        # cet CT=DT jacobians for the measurement matrix
+        H = np.zeros((5, 6))
+        H[0, 0] = dy / rho2
+        H[0, 1] = -dx / rho2
+        H[0, 2] = -1.0
+        H[0, 3] = -dy / rho2
+        H[0, 4] = dx / rho2
+
+        H[1, 0] = -dx / rho
+        H[1, 1] = -dy / rho
+        H[1, 3] = dx / rho
+        H[1, 4] = dy / rho
+
+        H[2, 0] = dy / rho2
+        H[2, 1] = -dx / rho2
+        H[2, 3] = -dy / rho2
+        H[2, 4] = dx / rho2
+        H[2, 5] = -1.0
+
+        H[3, 3] = 1.0
+        H[4, 4] = 1.0
+
+        measurement_perturbation_array = H @ self.current_state
+
+        return measurement_nom_array + measurement_perturbation_array
 
 
     def _get_current_jacobian(self, control):

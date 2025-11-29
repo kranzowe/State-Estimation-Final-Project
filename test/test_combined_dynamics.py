@@ -170,19 +170,15 @@ def test_l_combined_prop_plots_progress_report_1():
     phi_g = -math.pi / 18
     v_g = 2
     omega_a = math.pi/25
-    x0 = np.array([10, 0, math.pi/2, -60, 0, -math.pi/2])
+    x0_nom = np.array([10, 0, math.pi/2, -60, 0, -math.pi/2])
     control_nom = np.array([v_g, phi_g, v_a, omega_a])
-
-    ugv = ugv_dynamics.Dynamical_UGV(x0[0:3])
-    uav = uav_dynamics.Dynamical_UAV(x0[3:6])
-    combo = combined_system.CombinedSystem(ugv, uav)
 
     dt = 0.1
     t = 0
 
     #recreate the system but perturbed
     perturb_x0 = np.array([0, 1, 0, 0, 0, 0.1])
-    x0 += perturb_x0
+    x0 = x0_nom + perturb_x0
     ugv = ugv_dynamics.Dynamical_UGV(perturb_x0[0:3])
     uav = uav_dynamics.Dynamical_UAV(perturb_x0[3:6])
     combo = combined_system.CombinedSystem(ugv, uav)
@@ -190,26 +186,30 @@ def test_l_combined_prop_plots_progress_report_1():
     control_perturb = np.array([0,0,0,0])
 
     ephemeris_perturb = [perturb_x0]
-    ephemeris_nom = [x0]
+    ephemeris_nom = [x0_nom]
     times = [t]
-    measurements = [combo.create_measurements_from_states()]
+
+    measurements = []
     while t <=100:
-        x_nom_ugv = ugv.update_nominal_state(t,x0[0:3],control_nom[0:2])
-        x_nom_auv = uav.update_nominal_state(t,x0[3:6],control_nom[2:4])
+        x_nom_ugv = ugv.update_nominal_state(t,x0_nom[0:3],control_nom[0:2])
+        x_nom_auv = uav.update_nominal_state(t,x0_nom[3:6],control_nom[2:4])
         x_nom = np.concatenate((x_nom_ugv, x_nom_auv))
         F, G = combo.get_dt_state_transition_matrices(dt, x_nom, control_nom)
         combo.step_dt_states(F,G,control_perturb)
         ephemeris_nom.append(x_nom)
         ephemeris_perturb.append(combo.current_state)
-        measurements.append(combo.create_measurements_from_states())
+        measurements.append(combo.create_dt_measurements(x_nom))
         t += dt
         times.append(t)
+
+
 
     # ai helped me plot cuz eww
     ephemeris_perturb = np.array(ephemeris_perturb)
     ephemeris_nom = np.array(ephemeris_nom)
     ephemeris = ephemeris_nom + ephemeris_perturb
     measurements = np.array(measurements)
+    times = np.array(times)
     
     # Create figure with 3 subplots
     fig, axes_1 = plt.subplots(6, 1, figsize=(10, 8))
@@ -287,23 +287,23 @@ def test_l_combined_prop_plots_progress_report_1():
     fig.suptitle('DT linear measurements', fontsize=16)
 
     #plot
-    axes_2[0].plot(times, measurements[:, 0])
+    axes_2[0].plot(times[1:], measurements[:, 0])
     axes_2[0].set_ylabel('θ_1 (rad)')
     axes_2[0].grid(True)
 
-    axes_2[1].plot(times, measurements[:, 1])
+    axes_2[1].plot(times[1:], measurements[:, 1])
     axes_2[1].set_ylabel('D (m)')
     axes_2[1].grid(True)
 
-    axes_2[2].plot(times, measurements[:, 2])
+    axes_2[2].plot(times[1:], measurements[:, 2])
     axes_2[2].set_ylabel('θ_2 (rad)')
     axes_2[2].grid(True)
 
-    axes_2[3].plot(times, measurements[:, 3])
+    axes_2[3].plot(times[1:], measurements[:, 3])
     axes_2[3].set_ylabel('ζ_a (m)')
     axes_2[3].grid(True)
 
-    axes_2[4].plot(times, measurements[:, 4])
+    axes_2[4].plot(times[1:], measurements[:, 4])
     axes_2[4].set_ylabel('η_a (m)')
     axes_2[4].set_xlabel('Time (s)')
     axes_2[4].grid(True)
