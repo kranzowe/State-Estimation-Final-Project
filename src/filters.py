@@ -92,6 +92,7 @@ class LKF():
 class EKF():
     def __init__(self, dt, 
                  combined_system,
+                 control,
                  Q, 
                  R,
                  P_0,
@@ -113,16 +114,15 @@ class EKF():
 
         # adding control, even though control is constant.
         # these should stay at 0, and not update
-        self.du_prev = np.zeros((4,))
-        self.du = np.zeros((4,))
+        self.u = control
 
         # ephemerides
         # need to save off time histories of dx
         self.x_ephem = [x_0]
         self.P_ephem = [P_0]
+    
 
     def propagate(self, y_data):
-        # initialize dx and P for first prediction step
 
         # main propagation loop, call update and correct at each time step
         for k in range(np.shape(y_data)[1]):
@@ -130,40 +130,43 @@ class EKF():
             if k == 0: # no measurement at t = 0 :(
                 continue
 
-            #### START HERE
-
             # compute needed matrices
-            F_bar, G_bar = self.combined_system.get_dt_state_transition_matrices(self.dt, x_, nominal_control)
-            H_bar, Omega_bar = self.combined_system.get_dt_H_and_Omega(self.dt, nominal_state, nominal_control)
+            F_bar, G_bar = self.combined_system.get_dt_state_transition_matrices(self.dt, self.x_post, self.u)
+            H_bar, Omega_bar = self.combined_system.get_dt_H_and_Omega(self.dt, self.x_post, self.u)
             self.update(F_bar, G_bar, H_bar, Omega_bar)
             # todo: index correct spot
 
-            nominal_measurement = self.nominal_measurements[k]
             actual_measurement = y_data[:, k]
-            self.correct(actual_measurement, nominal_measurement, H_bar)
+            self.correct(actual_measurement, H_bar)
 
             # add to ephem
-            self.dx_ephem.append(self.dx_post)
+            self.x_ephem.append(self.x_post)
             self.P_ephem.append(self.P_post)
+
+            # didnt need this in LKF but we gotta update the combined systems state
+            self.combined_system.current_state = list(self.x_post)
 
     def update(self, F_bar, G_bar, H_bar, Omega_bar):
 
         # get F and G about these nominal inputs
-        self.dx_pre = F_bar @ self.dx_post + G_bar @ self.du_prev
+        self.combined_system.step_nl_propagation(self.u, self.dt)
+        self.x_pre = np.array(self.combined_system.current_state)
 
         F_bar_t = np.linalg.matrix_transpose(F_bar)
         Omega_bar_t = np.linalg.matrix_transpose(Omega_bar)
         self.P_pre = F_bar @ self.P_post @ F_bar_t + Omega_bar @ self.Q @ Omega_bar_t
         # todo: update du
 
-    def correct(self, meas, nominal_measurement, H_bar):
+    def correct(self, measurement, H_bar):
         # get y_nom from nominal trajectory
         # update dy and kalman gain matrix first
-        dy = meas - nominal_measurement
+
+        nonlinear_measurement = self.combined_system.create_measurements_from_states()
+
         H_bar_t = np.transpose(H_bar)
         self.Kk = self.P_pre @ H_bar_t @ np.linalg.inv(H_bar @ self.P_pre @ H_bar_t + self.R)
 
-        self.dx_post = self.dx_pre + self.Kk @ (dy - H_bar @ self.dx_pre)
+        self.x_post = self.x_pre + self.Kk @ (measurement - nonlinear_measurement)
         # todo: correct size of I
         self.P_post = (np.eye(6) - self.Kk @ H_bar) @ self.P_pre
         # tb cont

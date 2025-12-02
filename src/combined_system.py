@@ -113,6 +113,8 @@ class CombinedSystem():
         #update the current system state
         self.current_state = [result.y[0][-1], result.y[1][-1], theta_g, result.y[3][-1], result.y[4][-1], theta_a]
 
+    def finite_difference_F(self):
+        
 
     def create_measurements_from_states(self):
 
