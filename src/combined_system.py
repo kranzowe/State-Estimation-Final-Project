@@ -38,6 +38,40 @@ class CombinedSystem():
 
         return F, G
     
+    def get_dt_H_and_Omega(self, dt, x_nom, control_nom):
+
+        # simplifying relations
+        dx = x_nom[3] - x_nom[0]
+        dy = x_nom[4] - x_nom[1]
+        rho = np.sqrt(dx**2 + dy**2)
+        rho2 = dx**2 + dy**2
+
+        # cet CT=DT jacobians for the measurement matrix
+        H = np.zeros((5, 6))
+        H[0, 0] = dy / rho2
+        H[0, 1] = -dx / rho2
+        H[0, 2] = -1.0
+        H[0, 3] = -dy / rho2
+        H[0, 4] = dx / rho2
+
+        H[1, 0] = -dx / rho
+        H[1, 1] = -dy / rho
+        H[1, 3] = dx / rho
+        H[1, 4] = dy / rho
+
+        H[2, 0] = dy / rho2
+        H[2, 1] = -dx / rho2
+        H[2, 3] = -dy / rho2
+        H[2, 4] = dx / rho2
+        H[2, 5] = -1.0
+
+        H[3, 3] = 1.0
+        H[4, 4] = 1.0
+
+        Omega = np.eye(6)
+
+        return H, Omega
+
     def step_dt_states(self, F, G, control_perturb):
 
         self.ugv.step_dt_system(F[0:3, 0:3], G[0:3, 0:2], control_perturb[0:2])
