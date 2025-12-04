@@ -29,7 +29,17 @@ def test_ekf():
     dt = 0.1
     t = 0
 
+    ## generate truth ephem
+    truth_ephemeris = [x_0]
+    times = [t]
+    while t <=100:
+        combo.step_nl_propagation(control, dt)
+        truth_ephemeris.append(combo.current_state)
+        t += dt
+        times.append(t)
 
+    # ai helped me plot cuz eww
+    truth_ephemeris = np.array(truth_ephemeris)
 
     #
     R_true = np.array([[0.0225,0,0,0,0],
@@ -44,13 +54,14 @@ def test_ekf():
                         [0,0,0,0,0.001,0],
                         [0,0,0,0,0,0.01]])
 
-    P_0 = np.eye(6) * 1000000
+
+    P_0 = np.eye(6) * 10
 
     # now run the filter
     ekf = filters.EKF(dt,
                       combo,
                       control,
-                      Q_true,
+                      Q_true * (np.eye(6) * 10),
                       R_true,
                       P_0,
                       x_0)  
@@ -65,11 +76,10 @@ def test_ekf():
     # plot ephem  
 
     # ai helped me plot cuz eww
-    true_dx = np.array([0, 1, 0, 0, 0, 0.1])
     ephemeris = np.array(ekf.x_ephem)
     P_history = np.array(ekf.P_ephem)
     
-    # Extract 2-sigma bounds for each state (skip first timestep)
+    # Extract 2-sigma bounds for each state
     sigma_bounds = np.zeros((len(P_history), 6))
     for i in range(len(P_history)):
         sigma_bounds[i, :] = 2 * np.sqrt(np.diag(P_history[i]))
@@ -78,63 +88,63 @@ def test_ekf():
     fig, axes = plt.subplots(6, 1, figsize=(10, 12))
     
     # Plot zeta_g
-    axes[0].plot(t_vec, ephemeris[:, 0], label='Estimated')
+    axes[0].plot(t_vec, ephemeris[:, 0], label='Estimated', color='blue')
     axes[0].fill_between(t_vec, ephemeris[:, 0] - sigma_bounds[:, 0], 
-                         ephemeris[:, 0] + sigma_bounds[:, 0], alpha=0.3, label='2σ bounds')
-    axes[0].axhline(y=true_dx[0], color='r', linestyle='--', label='True')
-    axes[0].set_ylabel('dζ_g (m)')
-    axes[0].set_ylim([-5, 5])
+                         ephemeris[:, 0] + sigma_bounds[:, 0], alpha=0.3, color='blue', label='2σ bounds')
+    axes[0].plot(times, truth_ephemeris[:, 0], color='r', linestyle='--', label='True')
+    axes[0].set_ylabel('ζ_g (m)')
+    axes[0].set_ylim([-100, 300])
     axes[0].legend()
     axes[0].grid(True)
     
     # Plot eta_g
-    axes[1].plot(t_vec, ephemeris[:, 1], label='Estimated')
+    axes[1].plot(t_vec, ephemeris[:, 1], label='Estimated', color='blue')
     axes[1].fill_between(t_vec, ephemeris[:, 1] - sigma_bounds[:, 1], 
-                         ephemeris[:, 1] + sigma_bounds[:, 1], alpha=0.3, label='2σ bounds')
-    axes[1].axhline(y=true_dx[1], color='r', linestyle='--', label='True')
-    axes[1].set_ylabel('dη_g (m)')
-    axes[1].set_ylim([-5, 5])
+                         ephemeris[:, 1] + sigma_bounds[:, 1], alpha=0.3, color='blue', label='2σ bounds')
+    axes[1].plot(times, truth_ephemeris[:, 1], color='r', linestyle='--', label='True')
+    axes[1].set_ylabel('η_g (m)')
+    axes[1].set_ylim([-50, 50])
     axes[1].legend()
     axes[1].grid(True)
     
     # Plot theta_g
-    axes[2].plot(t_vec, ephemeris[:, 2], label='Estimated')
+    axes[2].plot(t_vec, ephemeris[:, 2], label='Estimated', color='blue')
     axes[2].fill_between(t_vec, ephemeris[:, 2] - sigma_bounds[:, 2], 
-                         ephemeris[:, 2] + sigma_bounds[:, 2], alpha=0.3, label='2σ bounds')
-    axes[2].axhline(y=true_dx[2], color='r', linestyle='--', label='True')
-    axes[2].set_ylabel('dθ_g (rad)')
-    axes[2].set_ylim([-0.5, 0.5])
+                         ephemeris[:, 2] + sigma_bounds[:, 2], alpha=0.3, color='blue', label='2σ bounds')
+    axes[2].plot(times, truth_ephemeris[:, 2], color='r', linestyle='--', label='True')
+    axes[2].set_ylabel('θ_g (rad)')
+    axes[2].set_ylim([-4, 4])
     axes[2].legend()
     axes[2].grid(True)
 
     # Plot zeta_a
-    axes[3].plot(t_vec, ephemeris[:, 3], label='Estimated')
+    axes[3].plot(t_vec, ephemeris[:, 3], label='Estimated', color='blue')
     axes[3].fill_between(t_vec, ephemeris[:, 3] - sigma_bounds[:, 3], 
-                         ephemeris[:, 3] + sigma_bounds[:, 3], alpha=0.3, label='2σ bounds')
-    axes[3].axhline(y=true_dx[3], color='r', linestyle='--', label='True')
-    axes[3].set_ylabel('dζ_a (m)')
-    axes[3].set_ylim([-5, 5])
+                         ephemeris[:, 3] + sigma_bounds[:, 3], alpha=0.3, color='blue', label='2σ bounds')
+    axes[3].plot(times, truth_ephemeris[:, 3], color='r', linestyle='--', label='True')
+    axes[3].set_ylabel('ζ_a (m)')
+    axes[3].set_ylim([-300, 100])
     axes[3].legend()
     axes[3].grid(True)
     
     # Plot eta_a
-    axes[4].plot(t_vec, ephemeris[:, 4], label='Estimated')
+    axes[4].plot(t_vec, ephemeris[:, 4], label='Estimated', color='blue')
     axes[4].fill_between(t_vec, ephemeris[:, 4] - sigma_bounds[:, 4], 
-                         ephemeris[:, 4] + sigma_bounds[:, 4], alpha=0.3, label='2σ bounds')
-    axes[4].axhline(y=true_dx[4], color='r', linestyle='--', label='True')
-    axes[4].set_ylabel('dη_a (m)')
-    axes[4].set_ylim([-5, 5])
+                         ephemeris[:, 4] + sigma_bounds[:, 4], alpha=0.3, color='blue', label='2σ bounds')
+    axes[4].plot(times, truth_ephemeris[:, 4], color='r', linestyle='--', label='True')
+    axes[4].set_ylabel('η_a (m)')
+    axes[4].set_ylim([-100, 500])
     axes[4].legend()
     axes[4].grid(True)
     
     # Plot theta_a
-    axes[5].plot(t_vec, ephemeris[:, 5], label='Estimated')
+    axes[5].plot(t_vec, ephemeris[:, 5], label='Estimated', color='blue')
     axes[5].fill_between(t_vec, ephemeris[:, 5] - sigma_bounds[:, 5], 
-                         ephemeris[:, 5] + sigma_bounds[:, 5], alpha=0.3, label='2σ bounds')
-    axes[5].axhline(y=true_dx[5], color='r', linestyle='--', label='True')
+                         ephemeris[:, 5] + sigma_bounds[:, 5], alpha=0.3, color='blue', label='2σ bounds')
+    axes[5].plot(times, truth_ephemeris[:, 5], color='r', linestyle='--', label='True')
     axes[5].set_xlabel('Time (s)')
-    axes[5].set_ylabel('dθ_a (rad)')
-    axes[5].set_ylim([-0.5, 0.5])
+    axes[5].set_ylabel('θ_a (rad)')
+    axes[5].set_ylim([-4, 4])
     axes[5].legend()
     axes[5].grid(True)
     

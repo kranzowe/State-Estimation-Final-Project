@@ -91,13 +91,16 @@ class CombinedSystem():
         solve_ivp() 
 
     #propagate the current timestep by a timestep dt using the control input control
-    def step_nl_propagation(self, control, dt):
+    def step_nl_propagation(self, control, dt, state = None):
         #Params:
         #   controls = [va, phi_a]
         #   dt = scalar propagation time
 
         #solve the ivp 
-        result = solve_ivp(self.get_nl_d_state, [0, dt], self.current_state, args=(control,))    
+        if state is None:
+            result = solve_ivp(self.get_nl_d_state, [0, dt], self.current_state, args=(control,))
+        else:  
+            result = solve_ivp(self.get_nl_d_state, [0, dt], state, args=(control,))    
 
         theta_g = result.y[2][-1]
         if theta_g > math.pi:
@@ -111,27 +114,40 @@ class CombinedSystem():
             theta_a += 2*math.pi
 
         #update the current system state
-        self.current_state = [result.y[0][-1], result.y[1][-1], theta_g, result.y[3][-1], result.y[4][-1], theta_a]
+        if state is None:
+            self.current_state = [result.y[0][-1], result.y[1][-1], theta_g, result.y[3][-1], result.y[4][-1], theta_a]
+        else:
+            return np.array([result.y[0][-1], result.y[1][-1], theta_g, result.y[3][-1], result.y[4][-1], theta_a])
 
-    def finite_difference_F(self):
-        
-
-    def create_measurements_from_states(self):
+    def create_measurements_from_states(self, state = None):
 
         measurement_array = np.zeros([5])
 
         #bearing to the auv to the ugv
-        measurement_array[0] = math.atan2(self.current_state[4] - self.current_state[1], self.current_state[3] - self.current_state[0]) - self.current_state[2]
+        if state is None:
+            measurement_array[0] = math.atan2(self.current_state[4] - self.current_state[1], self.current_state[3] - self.current_state[0]) - self.current_state[2]
 
-        #positional distance
-        measurement_array[1] = math.sqrt((self.current_state[0] - self.current_state[3]) ** 2 + (self.current_state[1] - self.current_state[4]) ** 2)
+            #positional distance
+            measurement_array[1] = math.sqrt((self.current_state[0] - self.current_state[3]) ** 2 + (self.current_state[1] - self.current_state[4]) ** 2)
 
-        #bearing from the auv to the ugv
-        measurement_array[2] = math.atan2(self.current_state[1] - self.current_state[4], self.current_state[0] - self.current_state[3]) - self.current_state[5]
+            #bearing from the auv to the ugv
+            measurement_array[2] = math.atan2(self.current_state[1] - self.current_state[4], self.current_state[0] - self.current_state[3]) - self.current_state[5]
 
-        #uav position
-        measurement_array[4] = self.current_state[4]
-        measurement_array[3] = self.current_state[3]
+            #uav position
+            measurement_array[4] = self.current_state[4]
+            measurement_array[3] = self.current_state[3]
+        else:
+            measurement_array[0] = math.atan2(state[4] - state[1], state[3] - state[0]) - state[2]
+
+            #positional distance
+            measurement_array[1] = math.sqrt((state[0] - state[3]) ** 2 + (state[1] - state[4]) ** 2)
+
+            #bearing from the auv to the ugv
+            measurement_array[2] = math.atan2(state[1] - state[4], state[0] - state[3]) - state[5]
+
+            #uav position
+            measurement_array[4] = state[4]
+            measurement_array[3] = state[3]
 
         #normalize angles
         if measurement_array[0] > math.pi:

@@ -131,44 +131,99 @@ class EKF():
                 continue
 
             # compute needed matrices
-            F_bar, G_bar = self.combined_system.get_dt_state_transition_matrices(self.dt, self.x_post, self.u)
-            H_bar, Omega_bar = self.combined_system.get_dt_H_and_Omega(self.dt, self.x_post, self.u)
-            self.update(F_bar, G_bar, H_bar, Omega_bar)
+            F = self.finite_difference_F(self.x_post, self.u)
+            G = self.finite_difference_G(self.x_post, self.u)
+            H = self.finite_difference_H(self.x_post, self.u)
+            Omega = np.eye(6)
+
+            self.update(F, G, H, Omega)
             # todo: index correct spot
 
             actual_measurement = y_data[:, k]
-            self.correct(actual_measurement, H_bar)
+            self.correct(actual_measurement, H)
 
             # add to ephem
             self.x_ephem.append(self.x_post)
             self.P_ephem.append(self.P_post)
 
             # didnt need this in LKF but we gotta update the combined systems state
-            self.combined_system.current_state = list(self.x_post)
+            # self.combined_system.current_state = list(self.x_post)
+            # still dont need it
 
-    def update(self, F_bar, G_bar, H_bar, Omega_bar):
+    def update(self, F, G, H, Omega):
 
         # get F and G about these nominal inputs
-        self.combined_system.step_nl_propagation(self.u, self.dt)
-        self.x_pre = np.array(self.combined_system.current_state)
+        self.x_pre = self.combined_system.step_nl_propagation(self.u, self.dt, state=self.x_post)
+        #could be maybe?  self.combined_system.step_nl_propagation(self.u, self.dt)
+        # could be maybe ? self.x_pre = np.array(self.combined_system.current_state)
 
-        F_bar_t = np.linalg.matrix_transpose(F_bar)
-        Omega_bar_t = np.linalg.matrix_transpose(Omega_bar)
-        self.P_pre = F_bar @ self.P_post @ F_bar_t + Omega_bar @ self.Q @ Omega_bar_t
+        F_t = np.linalg.matrix_transpose(F)
+        Omega_t = np.linalg.matrix_transpose(Omega)
+        self.P_pre = F @ self.P_post @ F_t + Omega @ self.Q @ Omega_t
         # todo: update du
 
-    def correct(self, measurement, H_bar):
+    def correct(self, measurement, H):
         # get y_nom from nominal trajectory
         # update dy and kalman gain matrix first
 
-        nonlinear_measurement = self.combined_system.create_measurements_from_states()
+        nonlinear_measurement = self.combined_system.create_measurements_from_states(state=self.x_pre)
 
-        H_bar_t = np.transpose(H_bar)
-        self.Kk = self.P_pre @ H_bar_t @ np.linalg.inv(H_bar @ self.P_pre @ H_bar_t + self.R)
+        H_t = np.transpose(H)
+        self.Kk = self.P_pre @ H_t @ np.linalg.inv(H @ self.P_pre @ H_t + self.R)
 
         self.x_post = self.x_pre + self.Kk @ (measurement - nonlinear_measurement)
         # todo: correct size of I
-        self.P_post = (np.eye(6) - self.Kk @ H_bar) @ self.P_pre
+        self.P_post = (np.eye(6) - self.Kk @ H) @ self.P_pre
         # tb cont
 
+    def finite_difference_F(self, x, u):
+        '''finite difference computation of F'''
+        F = np.zeros((6,6))
+        epsilon = 1e-8
 
+        x_prop_nominal = self.combined_system.step_nl_propagation(u, self.dt, state=x)
+
+        for i in range(6):
+            x_copy = x.copy() 
+            x_copy[i] += epsilon
+
+            x_prop = self.combined_system.step_nl_propagation(u, self.dt, state=x_copy)
+
+            F[:, i] = (x_prop - x_prop_nominal) / epsilon
+        
+        return F
+    
+    def finite_difference_G(self, x, u):
+        '''finite difference computation of G'''
+        G = np.zeros((6,4))
+        epsilon = 1e-8
+
+        x_prop_nominal = self.combined_system.step_nl_propagation(u, self.dt, state=x)
+
+        for i in range(4):
+            u_copy = u.copy() 
+            u_copy[i] += epsilon
+
+            x_prop = self.combined_system.step_nl_propagation(u_copy, self.dt, state=x)
+
+            G[:, i] = (x_prop - x_prop_nominal) / epsilon
+
+        return G
+
+    def finite_difference_H(self, x, u):
+        '''finite difference computation of H'''
+        H = np.zeros((5,6))
+        epsilon = 1e-8
+
+        y_nominal = self.combined_system.create_measurements_from_states(state=x)
+
+        for i in range(6):
+            x_copy = x.copy() 
+            x_copy[i] += epsilon
+
+            y_perturbed = self.combined_system.create_measurements_from_states(state=x_copy)
+
+            H[:, i] = (y_perturbed - y_nominal) / epsilon
+
+        return H
+            
