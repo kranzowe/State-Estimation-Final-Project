@@ -7,6 +7,8 @@ from scipy.integrate import solve_ivp
 from uav_dynamics import Dynamical_UAV
 from ugv_dynamics import Dynamical_UGV
 
+import matplotlib.pyplot as plt
+
 
 MAX_UGV_VELOCITY = 3
 MIN_UGV_VELOCITY = 0
@@ -296,7 +298,7 @@ class CombinedSystem():
 
         return np.hstack((d_state_ugv, d_state_uav))
     
-    def generate_truth_set(self, tmt_dt, tmt_samples, ugv_control=[2, -math.pi/18], uav_contrl=[12, math.pi/25]):
+    def generate_truth_set(self, tmt_dt, tmt_samples, ugv_control=[2, -math.pi/18], uav_control=[12, math.pi/25]):
 
         #this should be based on the nominal trajectory, so this is the default
 
@@ -312,8 +314,8 @@ class CombinedSystem():
             time += tmt_dt
 
             #increment state
-            self.ugv.step_nl_propagation(tmt_dt, ugv_control)
-            self.ugv.step_nl_propagation(tmt_dt, ugv_control)
+            self.ugv.step_nl_propagation(ugv_control, tmt_dt, process_noise=True)
+            self.uav.step_nl_propagation(uav_control, tmt_dt, process_noise=True)
 
             #add to output arrays
             tmt_times.append(time)
@@ -322,14 +324,32 @@ class CombinedSystem():
             #get measurements
             tmt_measurements.append(self.create_measurements_from_states())
 
+        return tmt_times, np.array(tmt_states), tmt_measurements
 
 
-if __name__ == "main":
+
+if __name__ == "__main__":
 
     #init the individual systems
-    uav = Dynamical_UAV()
-    ugv = Dynamical_UGV()
+    uav = Dynamical_UAV(np.array([-60, 0, -math.pi/2]))
+    ugv = Dynamical_UGV(np.array([10, 0, math.pi/2]))
 
     #initialize the full
     combo = CombinedSystem(ugv, uav)
+
+    times, states, measure = combo.generate_truth_set(0.1, 100)
+
+    #print(states.shape)
+
+    fig, axs = plt.subplots(3,2)
+
+    axs[0,0].plot(times, states[:, 0])
+    axs[1,0].plot(times, states[:, 1])
+    axs[2,0].plot(times, states[:, 2])
+
+    axs[0,1].plot(times, states[:, 3])
+    axs[1,1].plot(times, states[:, 4])
+    axs[2,1].plot(times, states[:, 5])
+
+    plt.show()
 
