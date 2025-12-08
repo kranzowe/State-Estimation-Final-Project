@@ -11,6 +11,10 @@ MIN_VELOCITY = 10
 MAX_TURN_RATE = math.pi / 6
 MIN_TURN_RATE = -math.pi / 6
 
+TRUTH_MODEL_PROCESS_NOISE = np.array([[0.001, 0.0, 0.0],
+                                      [0, 0.001, 0.0],
+                                      [0, 0.0, 0.01]])
+
 class Dynamical_UAV():
 
     def __init__(self, initial_state):
@@ -86,8 +90,20 @@ class Dynamical_UAV():
 
         return F_k, G_k
 
+    def get_process_noise_covariance(self, noise_covarience, dt, control, mapping=np.eye(3)):
+
+        A = (self._get_current_jacobian(self.current_state, control))[0:3, 0:3]
+
+        #use van loan's method the compute the dt process noise matrix Q
+        Z = np.vstack([np.hstack([-A, mapping@noise_covarience@np.transpose(mapping)]),
+                       np.hstack([np.zeros([3,3]), np.transpose(A)])])
+        
+        Ze = expm(Z * dt)
+
+        return np.transpose(Ze[3:6,3:6]) * Ze[0:3, 3:6]
+
     #propagate the current timestep by a timestep dt using the control input control
-    def step_nl_propagation(self, control, dt):
+    def step_nl_propagation(self, control, dt, process_noise=False):
         #Params:
         #   controls = [va, phi_a]
         #   dt = scalar propagation time
@@ -100,8 +116,14 @@ class Dynamical_UAV():
             theta -= 2*math.pi
         elif theta < -math.pi:
             theta += 2*math.pi
+
         #update the current system state
         self.current_state = [result.y[0][-1], result.y[1][-1], theta]
+
+        if(process_noise):
+            Q = self.get_process_noise_covariance(TRUTH_MODEL_PROCESS_NOISE, dt, control)
+
+            self.current_state = self.current_state + np.random.multivariate_normal(np.zeros([3]), Q)
 
 
     def _get_current_jacobian(self, x_nom, control):
@@ -119,7 +141,6 @@ class Dynamical_UAV():
         jac[2][4] = 1
 
         return jac
-
 
     def get_nl_d_state(self, t = None, state = None, control = None):
 

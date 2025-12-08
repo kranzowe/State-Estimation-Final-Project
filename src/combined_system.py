@@ -4,12 +4,16 @@ import math
 
 from scipy.integrate import solve_ivp
 
+from src.uav_dynamics import Dynamical_UAV
+from src.ugv_dynamics import Dynamical_UGV
+
+import matplotlib.pyplot as plt
+
 
 MAX_UGV_VELOCITY = 3
 MIN_UGV_VELOCITY = 0
 MAX_STEER_ANGLE = 5*math.pi / 12
 MIN_STEER_ANGLE = -5*math.pi / 12
-
 
 MAX_UAV_VELOCITY = 20
 MIN_UAV_VELOCITY = 10
@@ -17,6 +21,9 @@ MAX_TURN_RATE = math.pi / 6
 MIN_TURN_RATE = -math.pi / 6
 
 class CombinedSystem():
+
+    uav: Dynamical_UAV = None
+    ugv: Dynamical_UGV = None
 
     def __init__(self, ugv, uav):
         self.uav = uav
@@ -38,6 +45,40 @@ class CombinedSystem():
 
         return F, G
     
+    def get_dt_H_and_Omega(self, dt, x_nom, control_nom):
+
+        # simplifying relations
+        dx = x_nom[3] - x_nom[0]
+        dy = x_nom[4] - x_nom[1]
+        rho = np.sqrt(dx**2 + dy**2)
+        rho2 = dx**2 + dy**2
+
+        # cet CT=DT jacobians for the measurement matrix
+        H = np.zeros((5, 6))
+        H[0, 0] = dy / rho2
+        H[0, 1] = -dx / rho2
+        H[0, 2] = -1.0
+        H[0, 3] = -dy / rho2
+        H[0, 4] = dx / rho2
+
+        H[1, 0] = -dx / rho
+        H[1, 1] = -dy / rho
+        H[1, 3] = dx / rho
+        H[1, 4] = dy / rho
+
+        H[2, 0] = dy / rho2
+        H[2, 1] = -dx / rho2
+        H[2, 3] = -dy / rho2
+        H[2, 4] = dx / rho2
+        H[2, 5] = -1.0
+
+        H[3, 3] = 1.0
+        H[4, 4] = 1.0
+
+        Omega = np.eye(6)
+
+        return H, Omega
+
     def step_dt_states(self, F, G, control_perturb):
 
         self.ugv.step_dt_system(F[0:3, 0:3], G[0:3, 0:2], control_perturb[0:2])
@@ -45,7 +86,6 @@ class CombinedSystem():
         
         #update the current system state
         self.current_state = np.hstack([self.ugv.current_state, self.uav.current_state])
-
 
 
     #propagate the current timestep by a timestep dt using the control input control
@@ -57,13 +97,16 @@ class CombinedSystem():
         solve_ivp() 
 
     #propagate the current timestep by a timestep dt using the control input control
-    def step_nl_propagation(self, control, dt):
+    def step_nl_propagation(self, control, dt, state = None):
         #Params:
         #   controls = [va, phi_a]
         #   dt = scalar propagation time
 
         #solve the ivp 
-        result = solve_ivp(self.get_nl_d_state, [0, dt], self.current_state, args=(control,))    
+        if state is None:
+            result = solve_ivp(self.get_nl_d_state, [0, dt], self.current_state, args=(control,))
+        else:  
+            result = solve_ivp(self.get_nl_d_state, [0, dt], state, args=(control,))    
 
         theta_g = result.y[2][-1]
         if theta_g > math.pi:
@@ -77,25 +120,41 @@ class CombinedSystem():
             theta_a += 2*math.pi
 
         #update the current system state
-        self.current_state = [result.y[0][-1], result.y[1][-1], theta_g, result.y[3][-1], result.y[4][-1], theta_a]
+        if state is None:
+            self.current_state = [result.y[0][-1], result.y[1][-1], theta_g, result.y[3][-1], result.y[4][-1], theta_a]
+        else:
+            return np.array([result.y[0][-1], result.y[1][-1], theta_g, result.y[3][-1], result.y[4][-1], theta_a])
 
-
-    def create_measurements_from_states(self):
+    def create_measurements_from_states(self, state = None, measurement_noise_cov = None):
 
         measurement_array = np.zeros([5])
 
         #bearing to the auv to the ugv
-        measurement_array[0] = math.atan2(self.current_state[4] - self.current_state[1], self.current_state[3] - self.current_state[0]) - self.current_state[2]
+        if state is None:
 
-        #positional distance
-        measurement_array[1] = math.sqrt((self.current_state[0] - self.current_state[3]) ** 2 + (self.current_state[1] - self.current_state[4]) ** 2)
+            measurement_array[0] = math.atan2(self.current_state[4] - self.current_state[1], self.current_state[3] - self.current_state[0]) - self.current_state[2]
 
-        #bearing from the auv to the ugv
-        measurement_array[2] = math.atan2(self.current_state[1] - self.current_state[4], self.current_state[0] - self.current_state[3]) - self.current_state[5]
+            #positional distance
+            measurement_array[1] = math.sqrt((self.current_state[0] - self.current_state[3]) ** 2 + (self.current_state[1] - self.current_state[4]) ** 2)
 
-        #uav position
-        measurement_array[4] = self.current_state[4]
-        measurement_array[3] = self.current_state[3]
+            #bearing from the auv to the ugv
+            measurement_array[2] = math.atan2(self.current_state[1] - self.current_state[4], self.current_state[0] - self.current_state[3]) - self.current_state[5]
+
+            #uav position
+            measurement_array[4] = self.current_state[4]
+            measurement_array[3] = self.current_state[3]
+        else:
+            measurement_array[0] = math.atan2(state[4] - state[1], state[3] - state[0]) - state[2]
+
+            #positional distance
+            measurement_array[1] = math.sqrt((state[0] - state[3]) ** 2 + (state[1] - state[4]) ** 2)
+
+            #bearing from the auv to the ugv
+            measurement_array[2] = math.atan2(state[1] - state[4], state[0] - state[3]) - state[5]
+
+            #uav position
+            measurement_array[4] = state[4]
+            measurement_array[3] = state[3]
 
         #normalize angles
         if measurement_array[0] > math.pi:
@@ -106,6 +165,9 @@ class CombinedSystem():
             measurement_array[2] -= 2*math.pi
         elif measurement_array[2] < -math.pi:
             measurement_array[2] += 2*math.pi
+
+        if not (measurement_noise_cov is None):
+            measurement_array +=np.random.multivariate_normal(np.array([0,0,0,0,0]), measurement_noise_cov)
 
         return measurement_array
 
@@ -239,3 +301,58 @@ class CombinedSystem():
 
         return np.hstack((d_state_ugv, d_state_uav))
     
+    def generate_truth_set(self, tmt_dt, tmt_samples, measurement_noise_cov, ugv_control=[2, -math.pi/18], uav_control=[12, math.pi/25]):
+
+        #this should be based on the nominal trajectory, so this is the default
+
+        tmt_times = []
+        tmt_states = []
+        tmt_measurements = []
+
+        #generate a truth data set, complete with process noise
+        time = 0
+        for step in range(tmt_samples):
+
+            #increment time
+            time += tmt_dt
+
+            #increment state
+            self.ugv.step_nl_propagation(ugv_control, tmt_dt, process_noise=True)
+            self.uav.step_nl_propagation(uav_control, tmt_dt, process_noise=True)
+
+            #add to output arrays
+            tmt_times.append(time)
+            tmt_states.append(np.hstack([np.array(self.ugv.current_state), np.array(self.uav.current_state)]))
+
+            #get measurements
+            tmt_measurements.append(self.create_measurements_from_states(state=tmt_states[-1], measurement_noise_cov=measurement_noise_cov))
+
+        return tmt_times, np.array(tmt_states), np.array(tmt_measurements).transpose()
+
+
+
+if __name__ == "__main__":
+
+    #init the individual systems
+    uav = Dynamical_UAV(np.array([-60, 0, -math.pi/2]))
+    ugv = Dynamical_UGV(np.array([10, 0, math.pi/2]))
+
+    #initialize the full
+    combo = CombinedSystem(ugv, uav)
+
+    times, states, measure = combo.generate_truth_set(0.1, 100)
+
+    #print(states.shape)
+
+    fig, axs = plt.subplots(3,2)
+
+    axs[0,0].plot(times, states[:, 0])
+    axs[1,0].plot(times, states[:, 1])
+    axs[2,0].plot(times, states[:, 2])
+
+    axs[0,1].plot(times, states[:, 3])
+    axs[1,1].plot(times, states[:, 4])
+    axs[2,1].plot(times, states[:, 5])
+
+    plt.show()
+
