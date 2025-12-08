@@ -11,9 +11,9 @@ MIN_VELOCITY = 10
 MAX_TURN_RATE = math.pi / 6
 MIN_TURN_RATE = -math.pi / 6
 
-TRUTH_MODEL_PROCESS_NOISE = np.array([[0.01, 0.001, 0.0005],
-                                      [0.001, 0.01, 0.0005],
-                                      [0.0005, 0.0005, 0.001]])
+TRUTH_MODEL_PROCESS_NOISE = np.array([[0.001, 0.0, 0.0],
+                                      [0, 0.001, 0.0],
+                                      [0, 0.0, 0.01]])
 
 class Dynamical_UAV():
 

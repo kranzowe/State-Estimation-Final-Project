@@ -4,8 +4,8 @@ import math
 
 from scipy.integrate import solve_ivp
 
-from uav_dynamics import Dynamical_UAV
-from ugv_dynamics import Dynamical_UGV
+from src.uav_dynamics import Dynamical_UAV
+from src.ugv_dynamics import Dynamical_UGV
 
 import matplotlib.pyplot as plt
 
@@ -14,7 +14,6 @@ MAX_UGV_VELOCITY = 3
 MIN_UGV_VELOCITY = 0
 MAX_STEER_ANGLE = 5*math.pi / 12
 MIN_STEER_ANGLE = -5*math.pi / 12
-
 
 MAX_UAV_VELOCITY = 20
 MIN_UAV_VELOCITY = 10
@@ -126,12 +125,13 @@ class CombinedSystem():
         else:
             return np.array([result.y[0][-1], result.y[1][-1], theta_g, result.y[3][-1], result.y[4][-1], theta_a])
 
-    def create_measurements_from_states(self, state = None):
+    def create_measurements_from_states(self, state = None, measurement_noise_cov = None):
 
         measurement_array = np.zeros([5])
 
         #bearing to the auv to the ugv
         if state is None:
+
             measurement_array[0] = math.atan2(self.current_state[4] - self.current_state[1], self.current_state[3] - self.current_state[0]) - self.current_state[2]
 
             #positional distance
@@ -165,6 +165,9 @@ class CombinedSystem():
             measurement_array[2] -= 2*math.pi
         elif measurement_array[2] < -math.pi:
             measurement_array[2] += 2*math.pi
+
+        if not (measurement_noise_cov is None):
+            measurement_array +=np.random.multivariate_normal(np.array([0,0,0,0,0]), measurement_noise_cov)
 
         return measurement_array
 
@@ -298,7 +301,7 @@ class CombinedSystem():
 
         return np.hstack((d_state_ugv, d_state_uav))
     
-    def generate_truth_set(self, tmt_dt, tmt_samples, ugv_control=[2, -math.pi/18], uav_control=[12, math.pi/25]):
+    def generate_truth_set(self, tmt_dt, tmt_samples, measurement_noise_cov, ugv_control=[2, -math.pi/18], uav_control=[12, math.pi/25]):
 
         #this should be based on the nominal trajectory, so this is the default
 
@@ -322,9 +325,9 @@ class CombinedSystem():
             tmt_states.append(np.hstack([np.array(self.ugv.current_state), np.array(self.uav.current_state)]))
 
             #get measurements
-            tmt_measurements.append(self.create_measurements_from_states())
+            tmt_measurements.append(self.create_measurements_from_states(state=tmt_states[-1], measurement_noise_cov=measurement_noise_cov))
 
-        return tmt_times, np.array(tmt_states), tmt_measurements
+        return tmt_times, np.array(tmt_states), np.array(tmt_measurements).transpose()
 
 
 

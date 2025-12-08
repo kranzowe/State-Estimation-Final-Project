@@ -12,9 +12,9 @@ MIN_VELOCITY = 0
 MAX_STEER_ANGLE = 5*math.pi / 12
 MIN_STEER_ANGLE = -5*math.pi / 12
 
-TRUTH_MODEL_PROCESS_NOISE = np.array([[0.01, 0.001, 0.0005],
-                                      [0.001, 0.01, 0.0005],
-                                      [0.0005, 0.0005, 0.001]])
+TRUTH_MODEL_PROCESS_NOISE = np.array([[0.001, 0.0, 0.0],
+                                      [0, 0.001, 0.0],
+                                      [0, 0.0, 0.01]])
 
 class Dynamical_UGV():
 
