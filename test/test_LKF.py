@@ -10,8 +10,13 @@ import src.combined_system as combined_system
 from src import filters
 import math
 
+from scipy.stats import chi2
+
 import matplotlib.pyplot as plt
 
+NUM_TESTS = 50
+NUM_TESTING_STEPS = 100
+SIGNFICANCE_LEVEL = 0.01
 
 def test_lkf():
     """gen the plots as shown in the pdf"""
@@ -69,8 +74,9 @@ def test_lkf():
 
     
 
-    y_data = np.loadtxt("src\data\ydata.csv", delimiter=",")
-    t_vec = np.loadtxt(r"src\data\tvec.csv", delimiter=",")
+    y_data = np.loadtxt(f"{os.getcwd()}/src/data/ydata.csv", delimiter=",")
+    t_vec = np.loadtxt(f"{os.getcwd()}/src/data/tvec.csv", delimiter=",")
+
 
     lkf.propagate(y_data)
 
@@ -150,5 +156,110 @@ def test_lkf():
     axes[5].legend()
     axes[5].grid(True)
     
+    plt.tight_layout()
+    plt.show()
+
+def test_ekf_nees():
+
+    """gen the plots as shown in the pdf"""
+    # assumed nominal trajectory
+    x_0 = np.array([10, 0, math.pi/2, -60, 0, -math.pi/2])
+    x_0 += np.array([0, 1, 0, 0, 0, 0.1])
+
+    # constant control
+    control = np.array([2, -math.pi / 18, 12, math.pi/25])
+
+    ugv = ugv_dynamics.Dynamical_UGV(x_0[0:3])
+    uav = uav_dynamics.Dynamical_UAV(x_0[3:])
+    combo = combined_system.CombinedSystem(ugv, uav)
+
+    dt = 0.1
+    t = 0
+
+    dx_0 = np.zeros((6,))
+
+
+    # ## generate truth ephem
+    # truth_ephemeris = [x_0]
+    # times = [t]
+    # while t <=100:
+    #     combo.step_nl_propagation(control, dt)
+    #     truth_ephemeris.append(combo.current_state)
+    #     t += dt
+    #     times.append(t)
+
+    # # ai helped me plot cuz eww
+    # truth_ephemeris = np.array(truth_ephemeris)
+
+    #
+    nominal_ephemeris = [x_0]
+    nominal_controls = [control]
+    times = [t]
+    nominal_measurements = [combo.create_measurements_from_states()]
+    while t < NUM_TESTING_STEPS * dt:
+        combo.step_nl_propagation(control, dt)
+        nominal_ephemeris.append(combo.current_state)
+        nominal_controls.append(control)
+        nominal_measurements.append(combo.create_measurements_from_states())
+        t += dt
+        times.append(t)
+
+    R_true = np.array([[0.0225,0,0,0,0],
+                        [0,64,0,0,0],
+                        [0,0,0.04,0,0],
+                        [0,0,0,36,0],
+                        [0,0,0,0,36]])
+    Q_true = np.array([[0.001,0,0,0,0,0],
+                        [0,0.001,0,0,0,0],
+                        [0,0,0.01,0,0,0],
+                        [0,0,0,0.001,0,0],
+                        [0,0,0,0,0.001,0],
+                        [0,0,0,0,0,0.01]])
+
+
+    P_0 = np.eye(6) * 10
+
+    nees_sum = np.zeros([NUM_TESTING_STEPS, 6])
+
+    for _ in range(0, NUM_TESTS):
+
+        ugv = ugv_dynamics.Dynamical_UGV(x_0[0:3])
+        uav = uav_dynamics.Dynamical_UAV(x_0[3:])
+        combo = combined_system.CombinedSystem(ugv, uav)
+
+        lkf: filters.LKF = filters.LKF(dt, nominal_ephemeris, nominal_controls, nominal_measurements,
+                      combo,
+                      Q_true,
+                      R_true,
+                      P_0,
+                      dx_0)  
+
+        #generate the truth model to run the nees testing on
+        tmt_times, tmt_states, tmt_measurement = combo.generate_truth_set(dt, NUM_TESTING_STEPS, R_true, control[0:2], control[2:4])
+
+        # y_data = np.loadtxt("src\data\ydata.csv", delimiter=",")
+        # t_vec = np.loadtxt(r"src\data\tvec.csv", delimiter=",")
+
+        lkf.propagate(tmt_measurement)
+
+        x_ephem = np.array(lkf.dx_ephem) + np.array(nominal_ephemeris)[1:NUM_TESTING_STEPS+1]
+
+        for step, cov in enumerate(lkf.P_ephem):
+            
+            nees_sum[step,:] += (x_ephem[step,:] - tmt_states[step,:]) @ np.linalg.inv(cov) @ np.transpose(x_ephem[step,:] - tmt_states[step,:])
+
+    nees_sum = nees_sum / NUM_TESTS
+
+    # #determine the chi2inv for upper and lower error bound
+    r1_chi2 = chi2.ppf(SIGNFICANCE_LEVEL / 2, 6 * NUM_TESTS) / NUM_TESTS
+    r2_chi2 = chi2.ppf(1 - SIGNFICANCE_LEVEL / 2, 6 * NUM_TESTS) /  NUM_TESTS
+   
+    fig, axes = plt.subplots(1, 1, figsize=(10, 12))
+
+    axes.plot(tmt_times, nees_sum[:, 0], marker='o', linestyle="none", color='blue')
+    axes.plot(tmt_times, np.ones(len(tmt_times)) * r1_chi2, linestyle='--', color='red')
+    axes.plot(tmt_times, np.ones(len(tmt_times)) * r2_chi2, linestyle='--', color='red')
+
+
     plt.tight_layout()
     plt.show()
