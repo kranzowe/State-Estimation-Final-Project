@@ -1,6 +1,7 @@
 ''' Filter classes of project (LKF and EKF)'''
 
 import numpy as np
+from copy import deepcopy
 
 # todo: bar matrices need k subscript and need to be evaled at x_star, u_star at each step before update and correct
 class LKF():
@@ -144,7 +145,7 @@ class EKF():
 
             # add to ephem
             self.x_ephem.append(self.x_post)
-            self.P_ephem.append(self.P_post)
+            self.P_ephem.append(deepcopy(self.P_post))
 
             # didnt need this in LKF but we gotta update the combined systems state
             # self.combined_system.current_state = list(self.x_post)
@@ -162,6 +163,9 @@ class EKF():
         self.P_pre = F @ self.P_post @ F_t + Omega @ self.Q @ Omega_t
         # todo: update du
 
+        self.enforce_pos_semi_def(self.P_pre, F=F, Omega=Omega)
+
+
     def correct(self, measurement, H):
         # get y_nom from nominal trajectory
         # update dy and kalman gain matrix first
@@ -175,6 +179,47 @@ class EKF():
         # todo: correct size of I
         self.P_post = (np.eye(6) - self.Kk @ H) @ self.P_pre
         # tb cont
+
+        self.enforce_pos_semi_def(self.P_post, H=H, correct_step=True)
+
+    def enforce_pos_semi_def(self, mat, F = None, Omega=None, H = None, correct_step=False):
+
+        if not (np.allclose(mat, np.transpose(mat))):
+            if not (correct_step):
+                print("Matrix is no longer postive semidefinite during prediction")
+            else:
+                print("Matrix is no longer postive semidefinite during correction")
+
+            print(mat)
+        #get the covarince's eigen values
+        eigen_vals = np.linalg.eigvalsh(mat)
+
+        if not (np.all(eigen_vals >= -1e-9)):
+            if not (correct_step):
+                print("Matrix is no longer postive semidefinite during prediction")
+
+                print("F Matrix ---------------")
+                print(F)
+                print("Omega Matrix ---------------")
+                print(Omega)
+                print("Last Cov ----------")
+                print(self.P_post)
+
+            else:
+                print("Matrix is no longer postive semidefinite during correction")
+
+                print("H Matrix ---------------")
+                print(H)
+                print("Kalman Matrix ---------------")
+                print(self.Kk)
+                print("Last Cov ----------")
+                print(self.P_pre)
+
+
+            exit(0)
+
+        return
+            
 
     def finite_difference_F(self, x, u):
         '''finite difference computation of F'''

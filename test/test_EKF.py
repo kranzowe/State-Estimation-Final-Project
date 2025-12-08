@@ -67,7 +67,7 @@ def test_ekf():
     ekf = filters.EKF(dt,
                       combo,
                       control,
-                      Q_true * (np.eye(6) * 10),
+                      Q_true,
                       R_true,
                       P_0,
                       x_0)  
@@ -200,21 +200,14 @@ def test_ekf_nees():
 
     P_0 = np.eye(6) * 10
 
-    nees_sum = np.zeros([NUM_TESTING_STEPS, 6])
+    nees_sum = np.zeros([NUM_TESTING_STEPS, 1])
+    error_sum = np.zeros([NUM_TESTING_STEPS, 6])
 
     for _ in range(0, NUM_TESTS):
 
         ugv = ugv_dynamics.Dynamical_UGV(x_0[0:3])
         uav = uav_dynamics.Dynamical_UAV(x_0[3:])
-        combo = combined_system.CombinedSystem(ugv, uav)
-
-        ekf = filters.EKF(dt,
-                        combo,
-                        control,
-                        Q_true * (np.eye(6) * 10),
-                        R_true,
-                        P_0,
-                        x_0)  
+        combo = combined_system.CombinedSystem(ugv, uav) 
 
         #generate the truth model to run the nees testing on
         tmt_times, tmt_states, tmt_measurement = combo.generate_truth_set(dt, NUM_TESTING_STEPS, R_true, control[0:2], control[2:4])
@@ -222,26 +215,62 @@ def test_ekf_nees():
         # y_data = np.loadtxt("src\data\ydata.csv", delimiter=",")
         # t_vec = np.loadtxt(r"src\data\tvec.csv", delimiter=",")
 
+        ugv = ugv_dynamics.Dynamical_UGV(x_0[0:3])
+        uav = uav_dynamics.Dynamical_UAV(x_0[3:])
+        combo = combined_system.CombinedSystem(ugv, uav)
+
+        ekf = filters.EKF(dt,
+                                combo,
+                                control,
+                                Q_true,
+                                R_true,
+                                P_0,
+                                x_0)  
+
+        tmt_measurement = np.insert(tmt_measurement, 0, np.zeros([5]), axis=1)
         ekf.propagate(tmt_measurement)
 
         x_ephem = np.array(ekf.x_ephem)
 
         for step, cov in enumerate(ekf.P_ephem):
+
+            if(step == 0):
+                continue
+
+            state_error = (x_ephem[step,:] - tmt_states[step - 1,:])
+
+            #normalize angles
+            if state_error[2] > math.pi:
+                state_error[2] -= 2*math.pi
+            elif state_error[2] < -math.pi:
+                state_error[2] += 2*math.pi
+            if state_error[5] > math.pi:
+                state_error[5] -= 2*math.pi
+            elif state_error[5] < -math.pi:
+                state_error[5] += 2*math.pi
             
-            nees_sum[step,:] += (x_ephem[step,:] - tmt_states[step,:]) @ np.linalg.inv(cov) @ np.transpose(x_ephem[step,:] - tmt_states[step,:])
+            error_sum[step-1, :] += (state_error)
+            nees_sum[step-1, :] += (state_error) @ np.linalg.inv(cov) @ np.transpose(state_error)
 
     nees_sum = nees_sum / NUM_TESTS
+    error_sum = error_sum / 50
 
     # #determine the chi2inv for upper and lower error bound
     r1_chi2 = chi2.ppf(SIGNFICANCE_LEVEL / 2, 6 * NUM_TESTS) / NUM_TESTS
     r2_chi2 = chi2.ppf(1 - SIGNFICANCE_LEVEL / 2, 6 * NUM_TESTS) /  NUM_TESTS
    
-    fig, axes = plt.subplots(1, 1, figsize=(10, 12))
+    fig, axes = plt.subplots(7, 1, figsize=(10, 12))
 
-    axes.plot(tmt_times, nees_sum[:, 0], marker='o', linestyle="none", color='blue')
-    axes.plot(tmt_times, np.ones(len(tmt_times)) * r1_chi2, linestyle='--', color='red')
-    axes.plot(tmt_times, np.ones(len(tmt_times)) * r2_chi2, linestyle='--', color='red')
+    axes[0].plot(tmt_times, nees_sum[:, 0], marker='o', linestyle="none", color='blue')
+    axes[0].plot(tmt_times, np.ones(len(tmt_times)) * r1_chi2, linestyle='--', color='red')
+    axes[0].plot(tmt_times, np.ones(len(tmt_times)) * r2_chi2, linestyle='--', color='red')
 
-
+    axes[1].plot(tmt_times, error_sum[:, 0], marker='o',  color='blue')
+    axes[2].plot(tmt_times, error_sum[:, 1], marker='o',  color='blue')
+    axes[3].plot(tmt_times, error_sum[:, 2], marker='o',  color='blue')
+    axes[4].plot(tmt_times, error_sum[:, 3], marker='o',  color='blue')
+    axes[5].plot(tmt_times, error_sum[:, 4], marker='o',  color='blue')
+    axes[6].plot(tmt_times, error_sum[:, 5], marker='o',  color='blue')
+    
     plt.tight_layout()
     plt.show()
