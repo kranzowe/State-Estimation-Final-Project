@@ -4,6 +4,9 @@ import math
 
 from scipy.integrate import solve_ivp
 
+from uav_dynamics import Dynamical_UAV
+from ugv_dynamics import Dynamical_UGV
+
 
 MAX_UGV_VELOCITY = 3
 MIN_UGV_VELOCITY = 0
@@ -17,6 +20,9 @@ MAX_TURN_RATE = math.pi / 6
 MIN_TURN_RATE = -math.pi / 6
 
 class CombinedSystem():
+
+    uav: Dynamical_UAV = None
+    ugv: Dynamical_UGV = None
 
     def __init__(self, ugv, uav):
         self.uav = uav
@@ -79,7 +85,6 @@ class CombinedSystem():
         
         #update the current system state
         self.current_state = np.hstack([self.ugv.current_state, self.uav.current_state])
-
 
 
     #propagate the current timestep by a timestep dt using the control input control
@@ -291,3 +296,40 @@ class CombinedSystem():
 
         return np.hstack((d_state_ugv, d_state_uav))
     
+    def generate_truth_set(self, tmt_dt, tmt_samples, ugv_control=[2, -math.pi/18], uav_contrl=[12, math.pi/25]):
+
+        #this should be based on the nominal trajectory, so this is the default
+
+        tmt_times = []
+        tmt_states = []
+        tmt_measurements = []
+
+        #generate a truth data set, complete with process noise
+        time = 0
+        for step in range(tmt_samples):
+
+            #increment time
+            time += tmt_dt
+
+            #increment state
+            self.ugv.step_nl_propagation(tmt_dt, ugv_control)
+            self.ugv.step_nl_propagation(tmt_dt, ugv_control)
+
+            #add to output arrays
+            tmt_times.append(time)
+            tmt_states.append(np.hstack([np.array(self.ugv.current_state), np.array(self.uav.current_state)]))
+
+            #get measurements
+            tmt_measurements.append(self.create_measurements_from_states())
+
+
+
+if __name__ == "main":
+
+    #init the individual systems
+    uav = Dynamical_UAV()
+    ugv = Dynamical_UGV()
+
+    #initialize the full
+    combo = CombinedSystem(ugv, uav)
+
