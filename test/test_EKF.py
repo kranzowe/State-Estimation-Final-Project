@@ -371,7 +371,7 @@ def test_ekf_nis():
             elif measurement_error[2] < -math.pi:
                 measurement_error[2] += 2*math.pi
 
-            invoation_cov = ekf.H_ephem[step] @ cov @ np.transpose(ekf.H_ephem[step]) + ekf.R
+            invoation_cov = ekf.H_ephem[step] @ cov @ np.transpose(ekf.H_ephem[step]) + ekf.R / 2
             
             error_sum[step, :] += (measurement_error)
             nis_sum[step, :] += (measurement_error) @ np.linalg.inv(invoation_cov) @ np.transpose(measurement_error)

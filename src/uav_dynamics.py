@@ -125,7 +125,7 @@ class Dynamical_UAV():
         if(process_noise):
             Q = self.get_process_noise_covariance(TRUTH_MODEL_PROCESS_NOISE, dt, control)
 
-            self.current_state = self.current_state + np.linalg.cholesky(Q) @ np.random.multivariate_normal(np.zeros([3]), np.eye(3))  
+            self.current_state = self.current_state + np.linalg.cholesky(Q) @ np.random.multivariate_normal(np.zeros([3]), np.eye(3))
 
 
     def _get_current_jacobian(self, x_nom, control):

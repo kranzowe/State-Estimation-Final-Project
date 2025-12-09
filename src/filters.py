@@ -185,7 +185,7 @@ class EKF():
         nonlinear_measurement = self.combined_system.create_measurements_from_states(state=self.x_pre)
 
         H_t = np.transpose(H)
-        self.Kk = self.P_pre @ H_t @ np.linalg.inv(H @ self.P_pre @ H_t + self.R)
+        self.Kk = self.P_pre @ H_t @ np.linalg.inv(H @ self.P_pre @ H_t + self.R / 1.41)
 
         self.x_post = self.x_pre + self.Kk @ (measurement - nonlinear_measurement)
         # todo: correct size of I
