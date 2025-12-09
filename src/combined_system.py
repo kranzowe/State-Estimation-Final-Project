@@ -156,6 +156,9 @@ class CombinedSystem():
             measurement_array[4] = state[4]
             measurement_array[3] = state[3]
 
+        if not (measurement_noise_cov is None):
+            measurement_array += np.linalg.cholesky(measurement_noise_cov) @ np.random.multivariate_normal(np.array([0,0,0,0,0]), np.eye(5))
+
         #normalize angles
         if measurement_array[0] > math.pi:
             measurement_array[0] -= 2*math.pi
@@ -165,9 +168,6 @@ class CombinedSystem():
             measurement_array[2] -= 2*math.pi
         elif measurement_array[2] < -math.pi:
             measurement_array[2] += 2*math.pi
-
-        if not (measurement_noise_cov is None):
-            measurement_array +=np.random.multivariate_normal(np.array([0,0,0,0,0]), measurement_noise_cov)
 
         return measurement_array
 
@@ -319,6 +319,16 @@ class CombinedSystem():
             #increment state
             self.ugv.step_nl_propagation(ugv_control, tmt_dt, process_noise=True)
             self.uav.step_nl_propagation(uav_control, tmt_dt, process_noise=True)
+
+            #normalize angles
+            if self.ugv.current_state[2] > math.pi:
+                self.ugv.current_state[2] -= 2*math.pi
+            elif self.ugv.current_state[2] < -math.pi:
+                self.ugv.current_state[2] += 2*math.pi
+            if self.uav.current_state[2] > math.pi:
+                self.uav.current_state[2] -= 2*math.pi
+            elif self.uav.current_state[2] < -math.pi:
+                self.uav.current_state[2] += 2*math.pi
 
             #add to output arrays
             tmt_times.append(time)
