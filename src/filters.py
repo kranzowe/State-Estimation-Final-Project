@@ -119,7 +119,9 @@ class EKF():
         # ephemerides
         # need to save off time histories of dx
         self.x_ephem = [x_0]
+        self.y_hat_ephem = []
         self.P_ephem = [P_0]
+        self.S_ephem = []
     
 
     def propagate(self, y_data):
@@ -154,6 +156,8 @@ class EKF():
 
         # get F and G about these nominal inputs
         self.x_pre = self.combined_system.step_nl_propagation(self.u, self.dt, state=self.x_post)
+        y_hat = self.combined_system.create_measurements_from_states(self.x_pre, None)
+        self.y_hat_ephem.append(y_hat)
         #could be maybe?  self.combined_system.step_nl_propagation(self.u, self.dt)
         # could be maybe ? self.x_pre = np.array(self.combined_system.current_state)
 
@@ -169,7 +173,9 @@ class EKF():
         nonlinear_measurement = self.combined_system.create_measurements_from_states(state=self.x_pre)
 
         H_t = np.transpose(H)
-        self.Kk = self.P_pre @ H_t @ np.linalg.inv(H @ self.P_pre @ H_t + self.R)
+        Sk = H @ self.P_pre @ H_t + self.R
+        self.S_ephem.append(Sk)
+        self.Kk = self.P_pre @ H_t @ np.linalg.inv(Sk)
 
         self.x_post = self.x_pre + self.Kk @ (measurement - nonlinear_measurement)
         # todo: correct size of I

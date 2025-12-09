@@ -245,3 +245,93 @@ def test_ekf_nees():
 
     plt.tight_layout()
     plt.show()
+
+
+def test_ekf_nis():
+    """gen the plots as shown in the pdf"""
+    # assumed nominal trajectory
+    x_0 = np.array([10, 0, math.pi / 2, -60, 0, -math.pi / 2])
+    x_0 += np.array([0, 1, 0, 0, 0, 0.1])
+
+    # constant control
+    control = np.array([2, -math.pi / 18, 12, math.pi / 25])
+
+    ugv = ugv_dynamics.Dynamical_UGV(x_0[0:3])
+    uav = uav_dynamics.Dynamical_UAV(x_0[3:])
+    combo = combined_system.CombinedSystem(ugv, uav)
+
+    dt = 0.1
+    t = 0
+
+    # ## generate truth ephem
+    # truth_ephemeris = [x_0]
+    # times = [t]
+    # while t <=100:
+    #     combo.step_nl_propagation(control, dt)
+    #     truth_ephemeris.append(combo.current_state)
+    #     t += dt
+    #     times.append(t)
+
+    # # ai helped me plot cuz eww
+    # truth_ephemeris = np.array(truth_ephemeris)
+
+    #
+    R_true = np.array([[0.0225, 0, 0, 0, 0],
+                       [0, 64, 0, 0, 0],
+                       [0, 0, 0.04, 0, 0],
+                       [0, 0, 0, 36, 0],
+                       [0, 0, 0, 0, 36]])
+    Q_true = np.array([[0.001, 0, 0, 0, 0, 0],
+                       [0, 0.001, 0, 0, 0, 0],
+                       [0, 0, 0.01, 0, 0, 0],
+                       [0, 0, 0, 0.001, 0, 0],
+                       [0, 0, 0, 0, 0.001, 0],
+                       [0, 0, 0, 0, 0, 0.01]])
+
+    P_0 = np.eye(6) * 10
+
+    nis_sum = np.zeros([NUM_TESTING_STEPS, 6])
+
+    for _ in range(0, NUM_TESTS):
+
+        ugv = ugv_dynamics.Dynamical_UGV(x_0[0:3])
+        uav = uav_dynamics.Dynamical_UAV(x_0[3:])
+        combo = combined_system.CombinedSystem(ugv, uav)
+
+        ekf = filters.EKF(dt,
+                          combo,
+                          control,
+                          Q_true * (np.eye(6) * 10),
+                          R_true,
+                          P_0,
+                          x_0)
+
+        # generate the truth model to run the nees testing on
+        tmt_times, tmt_states, tmt_measurement = combo.generate_truth_set(dt, NUM_TESTING_STEPS, R_true, control[0:2],
+                                                                          control[2:4])
+
+        # y_data = np.loadtxt("src\data\ydata.csv", delimiter=",")
+        # t_vec = np.loadtxt(r"src\data\tvec.csv", delimiter=",")
+
+        ekf.propagate(tmt_measurement)
+
+        y_hat_ephem = np.array(ekf.y_hat_ephem)
+
+        for step, (y_hat, S) in enumerate(zip(y_hat_ephem, ekf.S_ephem)):
+            nis_sum[step, :] += (y_hat - tmt_measurement[:, step].transpose()) @ np.linalg.inv(S) @ np.transpose(
+                y_hat - tmt_measurement[:, step].transpose())
+
+    nis_sum = nis_sum / NUM_TESTS
+
+    # #determine the chi2inv for upper and lower error bound
+    r1_chi2 = chi2.ppf(SIGNFICANCE_LEVEL / 2, 5 * NUM_TESTS) / NUM_TESTS
+    r2_chi2 = chi2.ppf(1 - SIGNFICANCE_LEVEL / 2, 5 * NUM_TESTS) / NUM_TESTS
+
+    fig, axes = plt.subplots(1, 1, figsize=(10, 12))
+
+    axes.plot(tmt_times, nis_sum[:, 0], marker='o', linestyle="none", color='blue')
+    axes.plot(tmt_times, np.ones(len(tmt_times)) * r1_chi2, linestyle='--', color='red')
+    axes.plot(tmt_times, np.ones(len(tmt_times)) * r2_chi2, linestyle='--', color='red')
+
+    plt.tight_layout()
+    plt.show()
