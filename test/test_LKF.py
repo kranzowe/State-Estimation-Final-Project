@@ -15,7 +15,7 @@ from scipy.stats import chi2
 import matplotlib.pyplot as plt
 
 NUM_TESTS = 50
-NUM_TESTING_STEPS = 100
+NUM_TESTING_STEPS = 1000
 SIGNFICANCE_LEVEL = 0.01
 
 def test_lkf():

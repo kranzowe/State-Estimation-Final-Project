@@ -135,7 +135,7 @@ class EKF():
             F = self.finite_difference_F(self.x_post, self.u)
             G = self.finite_difference_G(self.x_post, self.u)
             H = self.finite_difference_H(self.x_post, self.u)
-            Omega = np.eye(6)
+            Omega = np.eye(6) / self.dt
 
             self.update(F, G, H, Omega)
             # todo: index correct spot
@@ -144,8 +144,8 @@ class EKF():
             self.correct(actual_measurement, H)
 
             # add to ephem
-            self.x_ephem.append(self.x_post)
-            self.P_ephem.append(deepcopy(self.P_post))
+            self.x_ephem.append(self.x_post.copy())
+            self.P_ephem.append(self.P_post.copy())
 
             # didnt need this in LKF but we gotta update the combined systems state
             # self.combined_system.current_state = list(self.x_post)
