@@ -158,6 +158,7 @@ class CombinedSystem():
 
         if not (measurement_noise_cov is None):
             measurement_array += np.linalg.cholesky(measurement_noise_cov) @ np.random.multivariate_normal(np.array([0,0,0,0,0]), np.eye(5))
+            #measurement_array += np.random.multivariate_normal(np.array([0,0,0,0,0]), measurement_noise_cov)
 
         #normalize angles
         if measurement_array[0] > math.pi:

@@ -2,9 +2,12 @@
 
 import numpy as np
 from copy import deepcopy
+from src.combined_system import CombinedSystem
 
 # todo: bar matrices need k subscript and need to be evaled at x_star, u_star at each step before update and correct
 class LKF():
+    combined_system: CombinedSystem = None
+
     def __init__(self, dt, 
                  nominal_ephem, 
                  nominal_controls,
@@ -121,6 +124,9 @@ class EKF():
         # need to save off time histories of dx
         self.x_ephem = [x_0]
         self.P_ephem = [P_0]
+        self.P_pre_ephem = []
+        self.H_ephem = []
+        self.measurement_ephem = []
     
 
     def propagate(self, y_data):
@@ -140,12 +146,18 @@ class EKF():
             self.update(F, G, H, Omega)
             # todo: index correct spot
 
+            self.P_pre_ephem.append(self.P_pre.copy())
+            self.H_ephem.append(H)
+
             actual_measurement = y_data[:, k]
             self.correct(actual_measurement, H)
+
+            self.measurement_ephem.append(self.combined_system.create_measurements_from_states(state=self.x_pre))
 
             # add to ephem
             self.x_ephem.append(self.x_post.copy())
             self.P_ephem.append(self.P_post.copy())
+
 
             # didnt need this in LKF but we gotta update the combined systems state
             # self.combined_system.current_state = list(self.x_post)
