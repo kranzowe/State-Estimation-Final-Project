@@ -4,6 +4,20 @@ import numpy as np
 from copy import deepcopy
 from src.combined_system import CombinedSystem
 
+def wrap_angle(angle):
+    """helper func to put an angle in rads to range [-pi, pi]"""
+    while angle > np.pi:
+        angle -= 2 * np.pi
+    while angle < -np.pi:
+        angle += 2 * np.pi
+    return angle
+
+def angle_difference(angle1, angle2):
+    """gives the smallest difference in angle1 - angle2 with wrapping considerations"""
+    diff = angle1 - angle2
+    return wrap_angle(diff)
+
+
 # todo: bar matrices need k subscript and need to be evaled at x_star, u_star at each step before update and correct
 class LKF():
     combined_system: CombinedSystem = None
@@ -184,10 +198,17 @@ class EKF():
 
         nonlinear_measurement = self.combined_system.create_measurements_from_states(state=self.x_pre)
 
+        # special innovation comp since angles are weirds
+        innovation = measurement - nonlinear_measurement
+        # wrap bearing angles (indices 0 and 2 are bearing measurements)
+        innovation[0] = angle_difference(measurement[0], nonlinear_measurement[0])
+        innovation[2] = angle_difference(measurement[2], nonlinear_measurement[2])
+
+
         H_t = np.transpose(H)
         self.Kk = self.P_pre @ H_t @ np.linalg.inv(H @ self.P_pre @ H_t + self.R / 1.41)
 
-        self.x_post = self.x_pre + self.Kk @ (measurement - nonlinear_measurement)
+        self.x_post = self.x_pre + self.Kk @ innovation
         # todo: correct size of I
         self.P_post = (np.eye(6) - self.Kk @ H) @ self.P_pre
         # tb cont
@@ -246,7 +267,11 @@ class EKF():
 
             x_prop = self.combined_system.step_nl_propagation(u, self.dt, state=x_copy)
 
-            F[:, i] = (x_prop - x_prop_nominal) / epsilon
+            diff = x_prop - x_prop_nominal
+            diff[2] = angle_difference(x_prop[2], x_prop_nominal[2])  # theta_g
+            diff[5] = angle_difference(x_prop[5], x_prop_nominal[5])  # theta_a
+
+            F[:, i] = diff / epsilon
         
         return F
     
@@ -263,7 +288,11 @@ class EKF():
 
             x_prop = self.combined_system.step_nl_propagation(u_copy, self.dt, state=x)
 
-            G[:, i] = (x_prop - x_prop_nominal) / epsilon
+            diff = x_prop - x_prop_nominal
+            diff[2] = angle_difference(x_prop[2], x_prop_nominal[2])  # theta_g
+            diff[5] = angle_difference(x_prop[5], x_prop_nominal[5])  # theta_a
+
+            G[:, i] = diff / epsilon
 
         return G
 
@@ -280,7 +309,11 @@ class EKF():
 
             y_perturbed = self.combined_system.create_measurements_from_states(state=x_copy)
 
-            H[:, i] = (y_perturbed - y_nominal) / epsilon
+            diff = y_perturbed - y_nominal
+            diff[0] = angle_difference(y_perturbed[0], y_nominal[0])  # bearing from UGV to UAV
+            diff[2] = angle_difference(y_perturbed[2], y_nominal[2])  # bearing from UAV to UGV
+
+            H[:, i] = diff / epsilon
 
         return H
             
