@@ -328,7 +328,7 @@ def test_lkf_nees():
 
 
 
-def test_lfk_nis():
+def test_lkf_nis():
     np.random.seed(0)
     """gen the plots as shown in the pdf"""
     # assumed nominal trajectory
@@ -579,14 +579,9 @@ def test_lkf_comprehensive():
             nees_sum[step - 1, :] += state_error @ np.linalg.inv(cov) @ state_error
         
         # Compute NIS
-        for step in range(1, len(dy_ephem) + 1):
-            if step >= len(dy_ephem) + 1:
-                break
-            
-            # dy_ephem[step-1] predicts measurement at time step
-            # Reconstruct predicted measurement: y_pred = y_nom + dy
+        for step in range(1, len(dy_ephem)):
             y_pred = nominal_measurements[step] + dy_ephem[step - 1]
-            y_actual = tmt_measurement[:, step - 1]
+            y_actual = tmt_measurement[:, step]  # Changed from step-1 to step
             
             measurement_error = y_actual - y_pred
             measurement_error[0] = filters.angle_difference(y_actual[0], y_pred[0])
@@ -629,13 +624,13 @@ def test_lkf_comprehensive():
     dx_ephem_state = np.array(lkf_state.dx_ephem)
     x_ephem_state = np.array([nominal_ephemeris[i] + dx_ephem_state[i] for i in range(len(dx_ephem_state))])
     
-    # Compute state residuals
-    state_residuals = np.zeros((NUM_TESTING_STEPS, 6))
+    # Compute state residuals - fix range to match EKF
+    state_residuals = np.zeros((NUM_TESTING_STEPS-1, 6))
     for i in range(NUM_TESTING_STEPS-1):
         state_residuals[i, :] = x_ephem_state[i + 1, :] - truth_states[i, :]
         state_residuals[i, 2] = filters.angle_difference(x_ephem_state[i + 1, 2], truth_states[i, 2])
         state_residuals[i, 5] = filters.angle_difference(x_ephem_state[i + 1, 5], truth_states[i, 5])
-    
+
     # ========================================================================
     # PART 3: Measurement Residuals (vs ydata.csv)
     # ========================================================================
@@ -728,7 +723,7 @@ def test_lkf_comprehensive():
     state_labels = ['ζ_g (m)', 'η_g (m)', 'θ_g (rad)', 'ζ_a (m)', 'η_a (m)', 'θ_a (rad)']
     
     for i in range(6):
-        axes3[i].plot(truth_times, state_residuals[:, i], 'b-', alpha=0.6, linewidth=1)
+        axes3[i].plot(truth_times[:-1], state_residuals[:, i], 'b-', alpha=0.6, linewidth=1)
         axes3[i].axhline(0, color='k', linestyle='--', linewidth=1)
         mean_res = np.mean(state_residuals[:, i])
         std_res = np.std(state_residuals[:, i])
