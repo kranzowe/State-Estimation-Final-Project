@@ -21,6 +21,7 @@ class Dynamical_UAV():
         
         #set the initial state
         self.current_state = initial_state
+        self.current_state_true = initial_state
 
     def update_nominal_state(self, t, x_0, control_nom):
         # currently static method to get nominal state
@@ -111,7 +112,7 @@ class Dynamical_UAV():
         #   dt = scalar propagation time
 
         #solve the ivp 
-        result = solve_ivp(self.get_nl_d_state, [0, dt], self.current_state, args=(control,))    
+        result = solve_ivp(self.get_nl_d_state, [0, dt], self.current_state_true, args=(control,))
 
         theta = result.y[2][-1]
         if theta > math.pi:
@@ -120,13 +121,14 @@ class Dynamical_UAV():
             theta += 2*math.pi
 
         #update the current system state
-        self.current_state = [result.y[0][-1], result.y[1][-1], theta]
+        self.current_state_true = [result.y[0][-1], result.y[1][-1], theta]
 
         if(process_noise):
             Q = self.get_process_noise_covariance(TRUTH_MODEL_PROCESS_NOISE, dt, control)
 
-            self.current_state = self.current_state + np.linalg.cholesky(Q) @ np.random.multivariate_normal(np.zeros([3]), np.eye(3))  
-
+            self.current_state = self.current_state + np.linalg.cholesky(Q) @ np.random.multivariate_normal(np.zeros([3]), np.eye(3))
+        else:
+            self.current_state = self.current_state_true
 
     def _get_current_jacobian(self, x_nom, control):
 

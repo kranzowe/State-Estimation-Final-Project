@@ -75,7 +75,7 @@ class CombinedSystem():
         H[3, 3] = 1.0
         H[4, 4] = 1.0
 
-        Omega = np.eye(6)
+        Omega = np.eye(6)*dt
 
         return H, Omega
 
@@ -301,7 +301,7 @@ class CombinedSystem():
 
         return np.hstack((d_state_ugv, d_state_uav))
     
-    def generate_truth_set(self, tmt_dt, tmt_samples, measurement_noise_cov, ugv_control=[2, -math.pi/18], uav_control=[12, math.pi/25]):
+    def generate_truth_set(self, tmt_dt, tmt_samples, measurement_noise_cov, ugv_control=[2, -math.pi/18], uav_control=[12, math.pi/25], process_noise=True):
 
         #this should be based on the nominal trajectory, so this is the default
 
@@ -317,8 +317,8 @@ class CombinedSystem():
             time += tmt_dt
 
             #increment state
-            self.ugv.step_nl_propagation(ugv_control, tmt_dt, process_noise=True)
-            self.uav.step_nl_propagation(uav_control, tmt_dt, process_noise=True)
+            self.ugv.step_nl_propagation(ugv_control, tmt_dt, process_noise)
+            self.uav.step_nl_propagation(uav_control, tmt_dt, process_noise)
 
             #normalize angles
             if self.ugv.current_state[2] > math.pi:
