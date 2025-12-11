@@ -844,7 +844,7 @@ def test_ekf_comprehensive():
     
     # Plot 2: NIS
     fig2, ax2 = plt.subplots(1, 1, figsize=(10, 6))
-    ax2.plot(tmt_times, nis_sum[:, 0], marker='o', linestyle='none', color='orange', label='NIS')
+    ax2.plot(tmt_times[1:], nis_sum[:, 0], marker='o', linestyle='none', color='orange', label='NIS')
     ax2.axhline(r1_nis, linestyle='--', color='red', label=f'Lower bound ({r1_nis:.2f})')
     ax2.axhline(r2_nis, linestyle='--', color='red', label=f'Upper bound ({r2_nis:.2f})')
     ax2.axhline(5.0, linestyle=':', color='green', label='Expected (5.0)')
