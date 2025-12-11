@@ -493,6 +493,14 @@ def test_lkf_comprehensive():
     
     P_0 = np.diag([1.0, 1.0, 0.01, 1.0, 1.0, 0.01])
     dx_0 = np.zeros((6,))
+
+    #record single test for report
+    single_measurements = None
+    single_times = None
+    single_states= None
+    single_error = []
+    single_two_sigma = []
+
     
     # Generate nominal trajectory
     ugv_nom = ugv_dynamics.Dynamical_UGV(x_0[0:3])
@@ -514,7 +522,7 @@ def test_lkf_comprehensive():
     nees_sum = np.zeros([NUM_TESTING_STEPS, 1])
     nis_sum = np.zeros([NUM_TESTING_STEPS - 1, 1])  # missing one measurement
     
-    for _ in range(NUM_TESTS):
+    for test_num in range(NUM_TESTS):
         # Sample initial state with uncertainty
         x_0_truth = x_0 + np.random.multivariate_normal(np.zeros(6), P_0)
         
@@ -526,6 +534,11 @@ def test_lkf_comprehensive():
         tmt_times, tmt_states, tmt_measurement = combo.generate_truth_set(
             dt, NUM_TESTING_STEPS, R_true, control[0:2], control[2:4], process_noise=True
         )
+
+        if(single_measurements is None):
+            single_times = tmt_times
+            single_measurements = tmt_measurement
+            single_states = tmt_states
         
         # Run LKF from nominal trajectory with initial perturbation
         ugv_lkf = ugv_dynamics.Dynamical_UGV(x_0[0:3])
@@ -548,6 +561,16 @@ def test_lkf_comprehensive():
         for step, cov in enumerate(lkf.P_ephem):
             if step == 0:
                 continue
+
+            if(test_num == 0):
+                single_error.append(x_ephem[step,:] - tmt_states[step - 1,:])
+                single_two_sigma.append( [
+                    math.sqrt(cov[0,0]) * 2,
+                    math.sqrt(cov[1,1]) * 2,
+                    math.sqrt(cov[2,2]) * 2,
+                    math.sqrt(cov[3,3]) * 2,
+                    math.sqrt(cov[4,4]) * 2,
+                    math.sqrt(cov[5,5]) * 2])
             
             state_error = x_ephem[step] - tmt_states[step - 1]
             state_error[2] = filters.angle_difference(x_ephem[step, 2], tmt_states[step - 1, 2])
@@ -666,6 +689,9 @@ def test_lkf_comprehensive():
         meas_residuals[i, :] = y_data[:, i] - y_pred_data[i]
         meas_residuals[i, 0] = filters.angle_difference(y_data[0, i], y_pred_data[i, 0])
         meas_residuals[i, 2] = filters.angle_difference(y_data[2, i], y_pred_data[i, 2])
+
+    single_error = np.array(single_error)
+    single_two_sigma = np.array(single_two_sigma)
     
     # ========================================================================
     # PLOTTING
@@ -732,7 +758,39 @@ def test_lkf_comprehensive():
         axes4[i].legend(loc='upper right')
         axes4[i].grid(True, alpha=0.3)
         axes4[i].set_title(f'LKF Measurement Residual: {meas_labels[i]} (Actual - Predicted)')
-    
+
+    plt.tight_layout()
+
+    fig5, axes5 = plt.subplots(5,1, figsize=(12, 14))
+    meas_labels = ['Bearing UGV→UAV (rad)', 'Range (m)', 'Bearing UAV→UGV (rad)', 'UAV ζ (m)', 'UAV η (m)']
+    for i in range(5):
+        axes5[i].plot(single_times, single_measurements[i,:], "b-")
+        axes5[i].set_ylabel(meas_labels[i])
+
+    axes5[4].set_xlabel('Time (s)')
+    axes5[0].set_title(f'Truth Model Noisy Measurements for LKF NEES / NIST Testing')
+
+    fig6, axes6 = plt.subplots(6,1, figsize=(12, 14))
+    state_labels = ['ζ_g (m)', 'η_g (m)', 'θ_g (rad)', 'ζ_a (m)', 'η_a (m)', 'θ_a (rad)']
+    for i in range(6):
+        axes6[i].plot(single_times, single_states[:,i], "b-")
+        axes6[i].set_ylabel(state_labels[i])
+
+    axes6[4].set_xlabel('Time (s)')
+    axes6[0].set_title(f'Truth Model States for LKF NEES / NIS Testing ')
+
+    fig7, axes7 = plt.subplots(6,1, figsize=(12, 14))
+    state_labels = ['ζ_g (m)', 'η_g (m)', 'θ_g (rad)', 'ζ_a (m)', 'η_a (m)', 'θ_a (rad)']
+    for i in range(6):
+        axes7[i].plot(single_times, single_error[:,i], "r-", label="State Error")
+        axes7[i].fill_between(single_times, single_error[:,i] - single_two_sigma[:,i], single_error[:,i] + single_two_sigma[:,i],  alpha=0.2, color='blue', label=f'±2σ')
+        axes7[i].set_ylabel(state_labels[i])
+        axes7[i].legend(loc="upper right")
+
+    axes7[4].set_xlabel('Time (s)')
+    axes7[0].set_title(f'Truth Model States for LKF NEES / NIS Testing ')
+
+
     plt.tight_layout()
     plt.show()
 
