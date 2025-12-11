@@ -85,13 +85,18 @@ class LKF():
             if k == 0: # no measurement at t = 0 :(
                 continue
 
-            nominal_state = np.array(self.nominal_ephem[k])
-            nominal_control = self.nominal_controls[k]
+            nominal_state_last = np.array(self.nominal_ephem[k-1])
+            nominal_control_last = self.nominal_controls[k-1]
+
+            nominal_state_current = np.array(self.nominal_ephem[k])
+            nominal_control_current = self.nominal_controls[k]
 
             # compute needed matrices
-            F_bar, G_bar = self.combined_system.get_dt_state_transition_matrices(self.dt, nominal_state, nominal_control)
-            H_bar, Omega_bar = self.combined_system.get_dt_H_and_Omega(self.dt, nominal_state, nominal_control)
-            self.update(F_bar, G_bar, H_bar, Omega_bar)
+            F_bar, G_bar = self.combined_system.get_dt_state_transition_matrices(self.dt, nominal_state_last, nominal_control_last)
+            Omega_bar = np.eye(6)
+            self.update(F_bar, G_bar, Omega_bar)
+            # H needs to be the current state oops
+            H_bar = self.combined_system.get_dt_H(self.dt, nominal_state_current, nominal_control_current)
 
             # get predicted meas disturbance
             self.dy_ephem.append(H_bar @ self.dx_pre)
@@ -106,10 +111,14 @@ class LKF():
             self.dx_ephem.append(self.dx_post)
             self.P_ephem.append(self.P_post)
 
-    def update(self, F_bar, G_bar, H_bar, Omega_bar):
+    def update(self, F_bar, G_bar, Omega_bar):
 
         # get F and G about these nominal inputs
         self.dx_pre = F_bar @ self.dx_post + G_bar @ self.du_prev
+
+        # even perturbations gotta get wrapped
+        self.dx_pre[2] = wrap_angle(self.dx_pre[2])
+        self.dx_pre[5] = wrap_angle(self.dx_pre[5])
 
         F_bar_t = np.linalg.matrix_transpose(F_bar)
         Omega_bar_t = np.linalg.matrix_transpose(Omega_bar)
@@ -127,7 +136,10 @@ class LKF():
         self.Kk = self.P_pre @ H_bar_t @ np.linalg.inv(H_bar @ self.P_pre @ H_bar_t + self.R)
 
         self.dx_post = self.dx_pre + self.Kk @ (dy - H_bar @ self.dx_pre)
-        # todo: correct size of I
+        # wrap angles
+        self.dx_post[2] = wrap_angle(self.dx_post[2])
+        self.dx_post[5] = wrap_angle(self.dx_post[5])
+
         self.P_post = (np.eye(6) - self.Kk @ H_bar) @ self.P_pre
         # tb cont
 
@@ -180,7 +192,7 @@ class EKF():
             F = self.finite_difference_F(self.x_post, self.u)
             G = self.finite_difference_G(self.x_post, self.u)
             H = self.finite_difference_H(self.x_post, self.u)
-            Omega = np.eye(6)
+            Omega = np.eye(6) # noise is equally additive and we tune Q anyways
 
             self.update(F, G, H, Omega)
             # todo: index correct spot
