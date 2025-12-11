@@ -100,23 +100,34 @@ class Dynamical_UGV():
         #   controls = [vg, phi_g]
         #   dt = scalar propagation time
 
-        #solve the ivp 
-        result = solve_ivp(self.get_nl_d_state, [0, dt], self.current_state_true, args=(control,))
+        # Integrate from the CURRENT state (which may already have accumulated noise)
+        if process_noise:
+            start_state = self.current_state  # Use noisy state to accumulate noise
+        else:
+            start_state = self.current_state_true  # Use clean state
+        
+        # Solve the IVP 
+        result = solve_ivp(self.get_nl_d_state, [0, dt], start_state, args=(control,))
 
         theta = result.y[2][-1]
         if theta > math.pi:
             theta -= 2*math.pi
         elif theta < -math.pi:
             theta += 2*math.pi
-        #update the current system state
-        self.current_state_true = [result.y[0][-1], result.y[1][-1], theta]
-
-        if(process_noise):
-            Q = self.get_process_noise_covariance(TRUTH_MODEL_PROCESS_NOISE, dt, control)
-            self.current_state = self.current_state_true + np.linalg.cholesky(Q) @ np.random.multivariate_normal(np.zeros([3]), np.eye(3))
+        
+        # Update the deterministic (clean) trajectory
+        if not process_noise:
+            self.current_state_true = [result.y[0][-1], result.y[1][-1], theta]
+        
+        if process_noise:
+            # Use discrete-time process noise
+            Q_discrete = TRUTH_MODEL_PROCESS_NOISE * dt
+            noise = np.linalg.cholesky(Q_discrete) @ np.random.randn(3)
+            self.current_state = np.array([result.y[0][-1], result.y[1][-1], theta]) + noise
+            # Also update the clean trajectory for reference
+            self.current_state_true = [result.y[0][-1], result.y[1][-1], theta]
         else:
             self.current_state = self.current_state_true
-
 
     def _get_current_jacobian(self, x_nom, control):
 

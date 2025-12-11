@@ -1,7 +1,7 @@
 '''tests the linearized kalman filter'''
 import sys
 import os
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import numpy as np
 import src.ugv_dynamics as ugv_dynamics
@@ -195,7 +195,7 @@ def test_ekf_nees():
                         [0,0,0.01,0,0,0],
                         [0,0,0,0.001,0,0],
                         [0,0,0,0,0.001,0],
-                        [0,0,0,0,0,0.01]])
+                        [0,0,0,0,0,0.01]]) #* dt
 
 
     P_0 = np.eye(6) * 10
@@ -370,7 +370,7 @@ def test_ekf_nis():
             elif measurement_error[2] < -math.pi:
                 measurement_error[2] += 2*math.pi
 
-            invoation_cov = ekf.H_ephem[step] @ cov @ np.transpose(ekf.H_ephem[step]) + ekf.R / 2
+            invoation_cov = ekf.H_ephem[step] @ cov @ np.transpose(ekf.H_ephem[step]) + ekf.R
             
             error_sum[step, :] += (measurement_error)
             nis_sum[step, :] += (measurement_error) @ np.linalg.inv(invoation_cov) @ np.transpose(measurement_error)
@@ -396,3 +396,129 @@ def test_ekf_nis():
     
     plt.tight_layout()
     plt.show()
+
+def test_q_continuous_vs_discrete():
+    """Compare measurement residuals for Q discrete vs continuous interpretation"""
+    
+    x_0 = np.array([10, 0, math.pi/2, -60, 0, -math.pi/2])
+    
+    x_0 += np.array([0, 1, 0, 0, 0, 0.1])
+
+
+    
+    control = np.array([2, -math.pi / 18, 12, math.pi/25])
+    
+    dt = 0.1
+    
+    R_true = np.array([[0.0225,0,0,0,0],
+                        [0,64,0,0,0],
+                        [0,0,0.04,0,0],
+                        [0,0,0,36,0],
+                        [0,0,0,0,36]])
+    
+    # The given Q from the problem
+    Q_given = np.array([[0.001,0,0,0,0,0],
+                        [0,0.001,0,0,0,0],
+                        [0,0,0.01,0,0,0],
+                        [0,0,0,0.001,0,0],
+                        [0,0,0,0,0.001,0],
+                        [0,0,0,0,0,0.01]])
+    
+    NUM_STEPS = 100
+    
+    # Generate ONE truth trajectory with process noise
+    print("Generating truth trajectory with process noise...")
+    ugv = ugv_dynamics.Dynamical_UGV(x_0[0:3])
+    uav = uav_dynamics.Dynamical_UAV(x_0[3:])
+    combo_truth = combined_system.CombinedSystem(ugv, uav)
+    
+    times, truth_states, truth_measurements = combo_truth.generate_truth_set(
+        dt, NUM_STEPS, R_true, control[0:2], control[2:4], process_noise=False
+    )
+    
+    # Propagate states WITHOUT noise starting from x_0
+    print("Propagating nominal trajectory (no process noise)...")
+    ugv_nominal = ugv_dynamics.Dynamical_UGV(x_0[0:3])
+    uav_nominal = uav_dynamics.Dynamical_UAV(x_0[3:])
+    combo_nominal = combined_system.CombinedSystem(ugv_nominal, uav_nominal)
+    
+    nominal_states = [x_0]
+    for step in range(NUM_STEPS):
+        state = combo_nominal.step_nl_propagation(control, dt, state=nominal_states[-1])
+        nominal_states.append(state)
+    
+    nominal_states = np.array(nominal_states[1:])  # Remove initial state, match truth_states length
+    
+    # Convert nominal states to measurements
+    nominal_measurements = []
+    for state in nominal_states:
+        meas = combo_nominal.create_measurements_from_states(state=state, measurement_noise_cov=None)
+        nominal_measurements.append(meas)
+    
+    nominal_measurements = np.array(nominal_measurements)
+    truth_measurements = truth_measurements.T  # Transpose to match shape
+    
+    # Compute residuals: actual - predicted
+    residuals = truth_measurements - nominal_measurements
+    
+    # Wrap angle residuals
+    for i in range(len(residuals)):
+        residuals[i, 0] = filters.angle_difference(truth_measurements[i, 0], nominal_measurements[i, 0])
+        residuals[i, 2] = filters.angle_difference(truth_measurements[i, 2], nominal_measurements[i, 2])
+    
+    # Compute statistics
+    residual_means = np.mean(residuals, axis=0)
+    residual_stds = np.std(residuals, axis=0)
+    
+    # Expected standard deviations from R (measurement noise only if Q is way off)
+    expected_stds_R = np.sqrt(np.diag(R_true))
+    
+    print("\n" + "=" * 60)
+    print("RESIDUAL STATISTICS (Actual Measurements - Nominal Predictions)")
+    print("=" * 60)
+    print("Measurement | Mean Residual | Std Dev | Expected Std (from R)")
+    print("-" * 60)
+    meas_names = ['Bearing UGV→UAV', 'Range', 'Bearing UAV→UGV', 'UAV ζ', 'UAV η']
+    for i in range(5):
+        print(f"{meas_names[i]:16s} | {residual_means[i]:13.4f} | {residual_stds[i]:7.4f} | {expected_stds_R[i]:7.4f}")
+    
+    # Create residual plots
+    fig, axes = plt.subplots(5, 1, figsize=(12, 14))
+    
+    meas_labels = [
+        'Bearing from UGV to UAV (rad)',
+        'Range (m)',
+        'Bearing from UAV to UGV (rad)',
+        'UAV ζ position (m)',
+        'UAV η position (m)'
+    ]
+    
+    for i in range(5):
+        axes[i].plot(times, residuals[:, i], 'b-', alpha=0.6, linewidth=1)
+        axes[i].axhline(0, color='k', linestyle='--', linewidth=1)
+        axes[i].axhline(residual_means[i], color='r', linestyle='--', linewidth=2, 
+                       label=f'Mean = {residual_means[i]:.4f}')
+        axes[i].fill_between(times, -residual_stds[i], residual_stds[i], 
+                            alpha=0.2, color='blue', label=f'±1σ = {residual_stds[i]:.4f}')
+        axes[i].set_ylabel(meas_labels[i])
+        axes[i].set_xlabel('Time (s)')
+        axes[i].legend(loc='upper right')
+        axes[i].grid(True, alpha=0.3)
+        axes[i].set_title(f'{meas_labels[i]} - Residual (Actual - Predicted)')
+    
+    plt.tight_layout()
+    plt.show()
+    
+    print("\n" + "=" * 60)
+    print("INTERPRETATION")
+    print("=" * 60)
+    print("If residuals have:")
+    print("  - Small bias (mean ≈ 0): Process model is unbiased")
+    print("  - Std close to √R: Minimal process noise effect (or Q is too small)")
+    print("  - Std >> √R: Significant process noise accumulation")
+    print("\nThese residuals show the accumulated effect of process noise")
+    print("over the propagation WITHOUT correction from measurements.")
+
+
+if __name__ == "__main__":
+    test_q_continuous_vs_discrete()

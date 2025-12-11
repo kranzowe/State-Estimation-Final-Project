@@ -180,7 +180,7 @@ class EKF():
             F = self.finite_difference_F(self.x_post, self.u)
             G = self.finite_difference_G(self.x_post, self.u)
             H = self.finite_difference_H(self.x_post, self.u)
-            Omega = np.eye(6) / self.dt
+            Omega = np.eye(6)
 
             self.update(F, G, H, Omega)
             # todo: index correct spot
@@ -233,7 +233,7 @@ class EKF():
 
 
         H_t = np.transpose(H)
-        self.Kk = self.P_pre @ H_t @ np.linalg.inv(H @ self.P_pre @ H_t + self.R / 1.41)
+        self.Kk = self.P_pre @ H_t @ np.linalg.inv(H @ self.P_pre @ H_t + self.R)
 
         self.x_post = self.x_pre + self.Kk @ innovation
         # todo: correct size of I
@@ -343,4 +343,5 @@ class EKF():
             H[:, i] = diff / epsilon
 
         return H
+
             
