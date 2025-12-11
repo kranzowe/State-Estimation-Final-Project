@@ -160,14 +160,10 @@ def test_ekf_nees():
     """gen the plots as shown in the pdf"""
     # assumed nominal trajectory
     x_0 = np.array([10, 0, math.pi/2, -60, 0, -math.pi/2])
-    x_0 += np.array([0, 1, 0, 0, 0, 0.1])
+    x_truth = x_0 + np.array([0, 1, 0, 0, 0, 0.1])
 
     # constant control
     control = np.array([2, -math.pi / 18, 12, math.pi/25])
-
-    ugv = ugv_dynamics.Dynamical_UGV(x_0[0:3])
-    uav = uav_dynamics.Dynamical_UAV(x_0[3:])
-    combo = combined_system.CombinedSystem(ugv, uav)
 
     dt = 0.1
     t = 0
@@ -190,27 +186,29 @@ def test_ekf_nees():
                         [0,0,0.04,0,0],
                         [0,0,0,36,0],
                         [0,0,0,0,36]])
+
     Q_true = np.array([[0.001,0,0,0,0,0],
                         [0,0.001,0,0,0,0],
                         [0,0,0.01,0,0,0],
                         [0,0,0,0.001,0,0],
                         [0,0,0,0,0.001,0],
-                        [0,0,0,0,0,0.01]]) #* dt
+                        [0,0,0,0,0,0.01]]) / 20
 
 
-    P_0 = np.eye(6) * 10
+    # P_0 = np.eye(6) * 10
+    P_0 = np.diag([1.0, 1.0, 0.1, 1.0, 1.0, 0.1])
 
     nees_sum = np.zeros([NUM_TESTING_STEPS, 1])
     error_sum = np.zeros([NUM_TESTING_STEPS, 6])
 
     for _ in range(0, NUM_TESTS):
 
-        ugv = ugv_dynamics.Dynamical_UGV(x_0[0:3])
-        uav = uav_dynamics.Dynamical_UAV(x_0[3:])
-        combo = combined_system.CombinedSystem(ugv, uav) 
+        ugv_truth = ugv_dynamics.Dynamical_UGV(x_truth[0:3])
+        uav_truth = uav_dynamics.Dynamical_UAV(x_truth[3:])
+        combo_truth = combined_system.CombinedSystem(ugv_truth, uav_truth)
 
         #generate the truth model to run the nees testing on
-        tmt_times, tmt_states, tmt_measurement = combo.generate_truth_set(dt, NUM_TESTING_STEPS, R_true, control[0:2], control[2:4])
+        tmt_times, tmt_states, tmt_measurement = combo_truth.generate_truth_set(dt, NUM_TESTING_STEPS, R_true, control[0:2], control[2:4])
 
         # y_data = np.loadtxt("src\data\ydata.csv", delimiter=",")
         # t_vec = np.loadtxt(r"src\data\tvec.csv", delimiter=",")
@@ -280,14 +278,10 @@ def test_ekf_nis():
     """gen the plots as shown in the pdf"""
     # assumed nominal trajectory
     x_0 = np.array([10, 0, math.pi/2, -60, 0, -math.pi/2])
-    x_0 += np.array([0, 1, 0, 0, 0, 0.1])
+    x_truth = x_0 + np.array([0, 1, 0, 0, 0, 0.1])
 
     # constant control
     control = np.array([2, -math.pi / 18, 12, math.pi/25])
-
-    ugv = ugv_dynamics.Dynamical_UGV(x_0[0:3])
-    uav = uav_dynamics.Dynamical_UAV(x_0[3:])
-    combo = combined_system.CombinedSystem(ugv, uav)
 
     dt = 0.1
     t = 0
@@ -315,22 +309,23 @@ def test_ekf_nis():
                         [0,0,0.01,0,0,0],
                         [0,0,0,0.001,0,0],
                         [0,0,0,0,0.001,0],
-                        [0,0,0,0,0,0.01]])
+                        [0,0,0,0,0,0.01]]) / 20
 
 
-    P_0 = np.eye(6) * 10
+    # P_0 = np.eye(6) * 10
+    P_0 = np.diag([1.0, 1.0, 0.1, 1.0, 1.0, 0.1])
 
     nis_sum = np.zeros([NUM_TESTING_STEPS, 1])
     error_sum = np.zeros([NUM_TESTING_STEPS, 5])
 
     for _ in range(0, NUM_TESTS):
 
-        ugv = ugv_dynamics.Dynamical_UGV(x_0[0:3])
-        uav = uav_dynamics.Dynamical_UAV(x_0[3:])
-        combo = combined_system.CombinedSystem(ugv, uav) 
+        ugv_truth = ugv_dynamics.Dynamical_UGV(x_truth[0:3])
+        uav_truth = uav_dynamics.Dynamical_UAV(x_truth[3:])
+        combo_truth = combined_system.CombinedSystem(ugv_truth, uav_truth)
 
         #generate the truth model to run the nees testing on
-        tmt_times, tmt_states, tmt_measurement = combo.generate_truth_set(dt, NUM_TESTING_STEPS, R_true, control[0:2], control[2:4])
+        tmt_times, tmt_states, tmt_measurement = combo_truth.generate_truth_set(dt, NUM_TESTING_STEPS, R_true, control[0:2], control[2:4])
 
         # y_data = np.loadtxt("src\data\ydata.csv", delimiter=",")
         # t_vec = np.loadtxt(r"src\data\tvec.csv", delimiter=",")
@@ -519,6 +514,388 @@ def test_q_continuous_vs_discrete():
     print("\nThese residuals show the accumulated effect of process noise")
     print("over the propagation WITHOUT correction from measurements.")
 
+def test_estimate_R_from_data():
+    """Estimate measurement noise covariance R from ydata.csv"""
+    
+    x_0 = np.array([10, 0, math.pi/2, -60, 0, -math.pi/2])
+    x_0 += np.array([0, 1, 0, 0, 0, 0.1])
+    
+    control = np.array([2, -math.pi / 18, 12, math.pi/25])
+    
+    dt = 0.1
+    
+    # Load measurement data
+    y_data = np.loadtxt(f"{os.getcwd()}/src/data/ydata.csv", delimiter=",")
+    t_vec = np.loadtxt(f"{os.getcwd()}/src/data/tvec.csv", delimiter=",")
+
+    y_data = y_data[:, 1:]
+    t_vec = t_vec[1:]
+    
+    print("Loaded measurement data:")
+    print(f"  Shape: {y_data.shape}")
+    print(f"  Time steps: {len(t_vec)}")
+    
+    # Generate clean nominal trajectory (no process noise)
+    ugv = ugv_dynamics.Dynamical_UGV(x_0[0:3])
+    uav = uav_dynamics.Dynamical_UAV(x_0[3:])
+    combo = combined_system.CombinedSystem(ugv, uav)
+    
+    nominal_states = [x_0]
+    for step in range(y_data.shape[1] - 1):  # -1 because we start at x_0
+        state = combo.step_nl_propagation(control, dt, state=nominal_states[-1])
+        nominal_states.append(state)
+    
+    nominal_states = np.array(nominal_states)
+    
+    # Convert nominal states to predicted measurements
+    predicted_measurements = []
+    for state in nominal_states:
+        meas = combo.create_measurements_from_states(state=state, measurement_noise_cov=None)
+        predicted_measurements.append(meas)
+    
+    predicted_measurements = np.array(predicted_measurements).T  # Shape: (5, N)
+    
+    # Compute measurement residuals (innovations)
+    residuals = y_data - predicted_measurements
+    
+    # Handle angle wrapping for bearing measurements
+    for i in range(residuals.shape[1]):
+        residuals[0, i] = filters.angle_difference(y_data[0, i], predicted_measurements[0, i])
+        residuals[2, i] = filters.angle_difference(y_data[2, i], predicted_measurements[2, i])
+    
+    # Compute sample covariance matrix
+    R_estimated = np.cov(residuals)
+    
+    # Also compute individual variances
+    variances = np.var(residuals, axis=1)
+    std_devs = np.sqrt(variances)
+    
+    # The "true" R from the problem
+    R_given = np.array([[0.0225,0,0,0,0],
+                        [0,64,0,0,0],
+                        [0,0,0.04,0,0],
+                        [0,0,0,36,0],
+                        [0,0,0,0,36]])
+    
+    print("\n" + "=" * 70)
+    print("MEASUREMENT NOISE ANALYSIS")
+    print("=" * 70)
+    
+    print("\nMeasurement residual statistics:")
+    print("-" * 70)
+    meas_names = ['Bearing UGV→UAV (rad)', 'Range (m)', 'Bearing UAV→UGV (rad)', 'UAV ζ (m)', 'UAV η (m)']
+    print(f"{'Measurement':<25} | {'Mean':<10} | {'Std Dev':<10} | {'Variance':<10}")
+    print("-" * 70)
+    for i in range(5):
+        mean_res = np.mean(residuals[i, :])
+        print(f"{meas_names[i]:<25} | {mean_res:>10.6f} | {std_devs[i]:>10.4f} | {variances[i]:>10.4f}")
+    
+    print("\n" + "=" * 70)
+    print("ESTIMATED R (diagonal elements):")
+    print("-" * 70)
+    print(f"{'Measurement':<25} | {'Estimated':<12} | {'Given':<12} | {'Ratio':<10}")
+    print("-" * 70)
+    for i in range(5):
+        given_var = R_given[i, i]
+        ratio = variances[i] / given_var if given_var > 0 else float('inf')
+        print(f"{meas_names[i]:<25} | {variances[i]:>12.6f} | {given_var:>12.6f} | {ratio:>10.4f}")
+    
+    print("\n" + "=" * 70)
+    print("ESTIMATED R MATRIX (full covariance):")
+    print("=" * 70)
+    print(R_estimated)
+    
+    print("\n" + "=" * 70)
+    print("GIVEN R MATRIX:")
+    print("=" * 70)
+    print(R_given)
+    
+    print("\n" + "=" * 70)
+    print("OFF-DIAGONAL CORRELATIONS:")
+    print("=" * 70)
+    # Compute correlation matrix
+    correlation = np.corrcoef(residuals)
+    print("Correlation matrix:")
+    print(correlation)
+    print("\nNote: Values close to 0 indicate measurements are uncorrelated")
+    print("      (which justifies a diagonal R matrix)")
+    
+    # Create plots
+    fig, axes = plt.subplots(3, 2, figsize=(14, 10))
+    axes = axes.flatten()
+    
+    for i in range(5):
+        axes[i].hist(residuals[i, :], bins=30, alpha=0.7, edgecolor='black', density=True)
+        
+        # Overlay theoretical normal distribution
+        mu = np.mean(residuals[i, :])
+        sigma = std_devs[i]
+        x = np.linspace(mu - 4*sigma, mu + 4*sigma, 100)
+        theoretical = (1/(sigma * np.sqrt(2*np.pi))) * np.exp(-0.5*((x - mu)/sigma)**2)
+        axes[i].plot(x, theoretical, 'r-', linewidth=2, label=f'N({mu:.4f}, {sigma:.4f}²)')
+        
+        axes[i].set_xlabel('Residual')
+        axes[i].set_ylabel('Density')
+        axes[i].set_title(meas_names[i])
+        axes[i].legend()
+        axes[i].grid(True, alpha=0.3)
+    
+    # Remove the 6th subplot
+    fig.delaxes(axes[5])
+    
+    plt.tight_layout()
+    plt.show()
+    
+    # Plot residuals over time
+    fig2, axes2 = plt.subplots(5, 1, figsize=(12, 14))
+    
+    for i in range(5):
+        axes2[i].plot(t_vec, residuals[i, :], 'b-', alpha=0.6, linewidth=1)
+        axes2[i].axhline(0, color='k', linestyle='--', linewidth=1)
+        axes2[i].axhline(np.mean(residuals[i, :]), color='r', linestyle='--', linewidth=2, 
+                        label=f'Mean = {np.mean(residuals[i, :]):.4f}')
+        axes2[i].fill_between(t_vec, -std_devs[i], std_devs[i], 
+                             alpha=0.2, color='blue', label=f'±1σ = {std_devs[i]:.4f}')
+        axes2[i].set_ylabel(meas_names[i])
+        axes2[i].set_xlabel('Time (s)')
+        axes2[i].legend(loc='upper right')
+        axes2[i].grid(True, alpha=0.3)
+        axes2[i].set_title(f'{meas_names[i]} - Measurement Residuals')
+    
+    plt.tight_layout()
+    plt.show()
+    
+    print("\n" + "=" * 70)
+    print("INTERPRETATION:")
+    print("=" * 70)
+    print("If estimated variances are close to given R:")
+    print("  → The given R is appropriate for this data")
+    print("If estimated >> given:")
+    print("  → Either measurement noise is larger than expected,")
+    print("     OR process noise is accumulating (Q effect)")
+    print("If estimated << given:")
+    print("  → Given R may be too conservative")
+    
+    return R_estimated, R_given
+
+
+def test_ekf_comprehensive():
+    """Comprehensive EKF test: NEES, NIS, state residuals, and measurement residuals"""
+    
+    x_0 = np.array([10, 0, math.pi/2, -60, 0, -math.pi/2])
+    control = np.array([2, -math.pi / 18, 12, math.pi/25])
+    dt = 0.1
+    
+    R_true = np.array([[0.0225,0,0,0,0],
+                        [0,64,0,0,0],
+                        [0,0,0.04,0,0],
+                        [0,0,0,36,0],
+                        [0,0,0,0,36]])
+    Q_true = np.array([[0.001,0,0,0,0,0],
+                        [0,0.001,0,0,0,0],
+                        [0,0,0.01,0,0,0],
+                        [0,0,0,0.001,0,0],
+                        [0,0,0,0,0.001,0],
+                        [0,0,0,0,0,0.01]]) / 9
+    
+    P_0 = np.diag([1.0, 1.0, 0.01, 1.0, 1.0, 0.01])
+    
+    # NEES and NIS Testing
+    nees_sum = np.zeros([NUM_TESTING_STEPS, 1])
+    nis_sum = np.zeros([NUM_TESTING_STEPS -1, 1]) # missing one measurement
+    
+    for _ in range(NUM_TESTS):
+        # ample initial state with uncertainty
+        x_0_truth = x_0 + np.random.multivariate_normal(np.zeros(6), P_0)
+        
+        ugv = ugv_dynamics.Dynamical_UGV(x_0_truth[0:3])
+        uav = uav_dynamics.Dynamical_UAV(x_0_truth[3:])
+        combo = combined_system.CombinedSystem(ugv, uav)
+        
+        # Generate truth with process noise
+        tmt_times, tmt_states, tmt_measurement = combo.generate_truth_set(
+            dt, NUM_TESTING_STEPS, R_true, control[0:2], control[2:4], process_noise=True
+        )
+        
+        # Run filter from nominal x_0
+        ugv = ugv_dynamics.Dynamical_UGV(x_0[0:3])
+        uav = uav_dynamics.Dynamical_UAV(x_0[3:])
+        combo = combined_system.CombinedSystem(ugv, uav)
+        
+        ekf = filters.EKF(dt, combo, control, Q_true, R_true, P_0, x_0)
+        
+        tmt_measurement = np.insert(tmt_measurement, 0, np.zeros([5]), axis=1)
+        ekf.propagate(tmt_measurement)
+        
+        x_ephem = np.array(ekf.x_ephem)
+        measure_ephem = np.array(ekf.measurement_ephem)
+        
+        # Compute NEES
+        for step, cov in enumerate(ekf.P_ephem):
+            if step == 0:
+                continue
+            
+            state_error = x_ephem[step,:] - tmt_states[step - 1,:]
+            state_error[2] = filters.angle_difference(x_ephem[step,2], tmt_states[step-1,2])
+            state_error[5] = filters.angle_difference(x_ephem[step,5], tmt_states[step-1,5])
+            
+            nees_sum[step-1, :] += state_error @ np.linalg.inv(cov) @ state_error
+        
+        # Compute NIS
+        tmt_measurement_T = tmt_measurement.T
+        for step in range(1, len(measure_ephem)):
+            measurement_error = measure_ephem[step,:] - tmt_measurement_T[step+1,:]
+            measurement_error[0] = filters.angle_difference(measure_ephem[step,0], tmt_measurement_T[step+1,0])
+            measurement_error[2] = filters.angle_difference(measure_ephem[step,2], tmt_measurement_T[step+1,2])
+            
+            innovation_cov = ekf.H_ephem[step] @ ekf.P_pre_ephem[step] @ ekf.H_ephem[step].T + R_true
+            nis_sum[step-1, :] += measurement_error @ np.linalg.inv(innovation_cov) @ measurement_error
+    
+    nees_sum = nees_sum / NUM_TESTS
+    nis_sum = nis_sum / NUM_TESTS
+    
+    # Chi-squared bounds
+    r1_nees = chi2.ppf(SIGNFICANCE_LEVEL / 2, 6 * NUM_TESTS) / NUM_TESTS
+    r2_nees = chi2.ppf(1 - SIGNFICANCE_LEVEL / 2, 6 * NUM_TESTS) / NUM_TESTS
+    r1_nis = chi2.ppf(SIGNFICANCE_LEVEL / 2, 5 * NUM_TESTS) / NUM_TESTS
+    r2_nis = chi2.ppf(1 - SIGNFICANCE_LEVEL / 2, 5 * NUM_TESTS) / NUM_TESTS
+    
+    # ========================================================================
+    # PART 2: State Residuals (vs truth with no process noise)
+    # ========================================================================
+    ugv = ugv_dynamics.Dynamical_UGV(x_0[0:3])
+    uav = uav_dynamics.Dynamical_UAV(x_0[3:])
+    combo_truth = combined_system.CombinedSystem(ugv, uav)
+    
+    # Generate truth WITHOUT process noise
+    truth_times, truth_states, truth_measurements = combo_truth.generate_truth_set(
+        dt, NUM_TESTING_STEPS, R_true, control[0:2], control[2:4], process_noise=False
+    )
+    
+    # Run filter on this data
+    ugv = ugv_dynamics.Dynamical_UGV(x_0[0:3])
+    uav = uav_dynamics.Dynamical_UAV(x_0[3:])
+    combo = combined_system.CombinedSystem(ugv, uav)
+    
+    ekf_state = filters.EKF(dt, combo, control, Q_true, R_true, P_0, x_0)
+    
+    truth_measurements = np.insert(truth_measurements, 0, np.zeros([5]), axis=1)
+    ekf_state.propagate(truth_measurements)
+    
+    x_ephem_state = np.array(ekf_state.x_ephem)
+    
+    # Compute state residuals
+    state_residuals = np.zeros((NUM_TESTING_STEPS, 6))
+    for i in range(NUM_TESTING_STEPS):
+        state_residuals[i, :] = x_ephem_state[i+1, :] - truth_states[i, :]
+        state_residuals[i, 2] = filters.angle_difference(x_ephem_state[i+1, 2], truth_states[i, 2])
+        state_residuals[i, 5] = filters.angle_difference(x_ephem_state[i+1, 5], truth_states[i, 5])
+    
+    # ========================================================================
+    # PART 3: Measurement Residuals (vs ydata.csv)
+    # ========================================================================
+    y_data = np.loadtxt(f"{os.getcwd()}/src/data/ydata.csv", delimiter=",")
+    t_vec = np.loadtxt(f"{os.getcwd()}/src/data/tvec.csv", delimiter=",")
+    
+    if y_data.shape[0] != 5:
+        y_data = y_data.T
+    
+    # Skip first measurement (NaN at t=0)
+    y_data = y_data[:, 1:]
+    t_vec_data = t_vec[1:]
+    
+    # Run filter on ydata
+    ugv = ugv_dynamics.Dynamical_UGV(x_0[0:3])
+    uav = uav_dynamics.Dynamical_UAV(x_0[3:])
+    combo = combined_system.CombinedSystem(ugv, uav)
+    
+    x_0_data = x_0 + np.array([0, 1, 0, 0, 0, 0.1])
+    ekf_meas = filters.EKF(dt, combo, control, Q_true, R_true, P_0, x_0_data)
+    
+    # Add NaN column at beginning
+    y_data_with_nan = np.column_stack([np.zeros(5), y_data])
+    ekf_meas.propagate(y_data_with_nan)
+    
+    measure_ephem_data = np.array(ekf_meas.measurement_ephem)
+    
+    # Compute measurement residuals
+    meas_residuals = np.zeros((len(t_vec_data), 5))
+    for i in range(len(t_vec_data)):
+        meas_residuals[i, :] = y_data[:, i] - measure_ephem_data[i, :]
+        meas_residuals[i, 0] = filters.angle_difference(y_data[0, i], measure_ephem_data[i, 0])
+        meas_residuals[i, 2] = filters.angle_difference(y_data[2, i], measure_ephem_data[i, 2])
+    
+    # ========================================================================
+    # PLOTTING
+    # ========================================================================
+    
+    # Plot 1: NEES
+    fig1, ax1 = plt.subplots(1, 1, figsize=(10, 6))
+    ax1.plot(tmt_times, nees_sum[:, 0], marker='o', linestyle='none', color='blue', label='NEES')
+    ax1.axhline(r1_nees, linestyle='--', color='red', label=f'Lower bound ({r1_nees:.2f})')
+    ax1.axhline(r2_nees, linestyle='--', color='red', label=f'Upper bound ({r2_nees:.2f})')
+    ax1.axhline(6.0, linestyle=':', color='green', label='Expected (6.0)')
+    ax1.set_xlabel('Time (s)')
+    ax1.set_ylabel('NEES')
+    ax1.set_title('Normalized Estimation Error Squared (NEES)')
+    ax1.legend()
+    ax1.grid(True)
+    plt.tight_layout()
+    
+    # Plot 2: NIS
+    fig2, ax2 = plt.subplots(1, 1, figsize=(10, 6))
+    ax2.plot(tmt_times, nis_sum[:, 0], marker='o', linestyle='none', color='orange', label='NIS')
+    ax2.axhline(r1_nis, linestyle='--', color='red', label=f'Lower bound ({r1_nis:.2f})')
+    ax2.axhline(r2_nis, linestyle='--', color='red', label=f'Upper bound ({r2_nis:.2f})')
+    ax2.axhline(5.0, linestyle=':', color='green', label='Expected (5.0)')
+    ax2.set_xlabel('Time (s)')
+    ax2.set_ylabel('NIS')
+    ax2.set_title('Normalized Innovation Squared (NIS)')
+    ax2.legend()
+    ax2.grid(True)
+    plt.tight_layout()
+    
+    # Plot 3: State Residuals
+    fig3, axes3 = plt.subplots(6, 1, figsize=(12, 14))
+    state_labels = ['ζ_g (m)', 'η_g (m)', 'θ_g (rad)', 'ζ_a (m)', 'η_a (m)', 'θ_a (rad)']
+    
+    for i in range(6):
+        axes3[i].plot(truth_times, state_residuals[:, i], 'b-', alpha=0.6, linewidth=1)
+        axes3[i].axhline(0, color='k', linestyle='--', linewidth=1)
+        mean_res = np.mean(state_residuals[:, i])
+        std_res = np.std(state_residuals[:, i])
+        axes3[i].axhline(mean_res, color='r', linestyle='--', linewidth=2, label=f'Mean = {mean_res:.4f}')
+        axes3[i].fill_between(truth_times, -std_res, std_res, alpha=0.2, color='blue', label=f'±1σ = {std_res:.4f}')
+        axes3[i].set_ylabel(state_labels[i])
+        axes3[i].set_xlabel('Time (s)')
+        axes3[i].legend(loc='upper right')
+        axes3[i].grid(True, alpha=0.3)
+        axes3[i].set_title(f'State Residual: {state_labels[i]} (Estimated - Truth)')
+    
+    plt.tight_layout()
+    
+    # Plot 4: Measurement Residuals
+    fig4, axes4 = plt.subplots(5, 1, figsize=(12, 14))
+    meas_labels = ['Bearing UGV→UAV (rad)', 'Range (m)', 'Bearing UAV→UGV (rad)', 'UAV ζ (m)', 'UAV η (m)']
+    
+    for i in range(5):
+        axes4[i].plot(t_vec_data, meas_residuals[:, i], 'b-', alpha=0.6, linewidth=1)
+        axes4[i].axhline(0, color='k', linestyle='--', linewidth=1)
+        mean_res = np.mean(meas_residuals[:, i])
+        std_res = np.std(meas_residuals[:, i])
+        axes4[i].axhline(mean_res, color='r', linestyle='--', linewidth=2, label=f'Mean = {mean_res:.4f}')
+        axes4[i].fill_between(t_vec_data, -std_res, std_res, alpha=0.2, color='blue', label=f'±1σ = {std_res:.4f}')
+        axes4[i].set_ylabel(meas_labels[i])
+        axes4[i].set_xlabel('Time (s)')
+        axes4[i].legend(loc='upper right')
+        axes4[i].grid(True, alpha=0.3)
+        axes4[i].set_title(f'Measurement Residual: {meas_labels[i]} (Actual - Predicted)')
+    
+    plt.tight_layout()
+    plt.show()
+
 
 if __name__ == "__main__":
-    test_q_continuous_vs_discrete()
+    test_ekf_comprehensive()
+    # R_estimated, R_given = test_estimate_R_from_data()
+    # test_q_continuous_vs_discrete()
