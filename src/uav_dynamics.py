@@ -130,6 +130,7 @@ class Dynamical_UAV():
         else:
             self.current_state = self.current_state_true
 
+
     def _get_current_jacobian(self, x_nom, control):
 
         #Params:
