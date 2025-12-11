@@ -257,52 +257,57 @@ def test_lkf_nees():
         x_ephem = np.array(lkf.dx_ephem) + np.array(nominal_ephemeris)[1:NUM_TESTING_STEPS+1]
 
         for step, cov in enumerate(lkf.P_ephem):
-            
-            nees_sum[step,:] += (x_ephem[step,:] - tmt_states[step,:]) @ np.linalg.inv(cov) @ np.transpose(x_ephem[step,:] - tmt_states[step,:])
-        #
-        #     # Create figure with 6 subplots
-        # fig, axes = plt.subplots(6, 1, figsize=(10, 12))
-        #
-        # # Plot zeta_g
-        # axes[0].plot(tmt_times, x_ephem[:, 0], label='Estimated')
-        # axes[0].set_ylabel('dζ_g (m)')
-        # axes[0].legend()
-        # axes[0].grid(True)
-        #
-        # # Plot eta_g
-        # axes[1].plot(tmt_times, x_ephem[:, 1], label='Estimated')
-        # axes[1].set_ylabel('dη_g (m)')
-        # axes[1].legend()
-        # axes[1].grid(True)
-        #
-        # # Plot theta_g
-        # axes[2].plot(tmt_times, x_ephem[:, 2], label='Estimated')
-        # axes[2].set_ylabel('dθ_g (rad)')
-        # axes[2].legend()
-        # axes[2].grid(True)
-        #
-        # # Plot zeta_a
-        # axes[3].plot(tmt_times, x_ephem[:, 3], label='Estimated')
-        # axes[3].set_ylabel('dζ_a (m)')
-        # axes[3].legend()
-        # axes[3].grid(True)
-        #
-        # # Plot eta_a
-        # axes[4].plot(tmt_times, x_ephem[:, 4], label='Estimated')
-        # axes[4].set_ylabel('dη_a (m)')
-        # axes[4].legend()
-        # axes[4].grid(True)
-        #
-        # # Plot theta_a
-        # axes[5].plot(tmt_times, x_ephem[:, 5], label='Estimated')
-        # axes[5].set_xlabel('Time (s)')
-        # axes[5].set_ylabel('dθ_a (rad)')
-        # axes[5].legend()
-        # axes[5].grid(True)
-        #
-        # plt.tight_layout()
-        # plt.show()
-        #
+            diff = x_ephem[step,:] - tmt_states[step,:]
+            diff[2] = filters.wrap_angle(diff[2])
+            diff[5] = filters.wrap_angle(diff[5])
+            nees_sum[step,:] += diff @ np.linalg.inv(cov) @ np.transpose(diff)
+        # todo: temp debugging plot
+        # Create figure with 6 subplots
+        fig, axes = plt.subplots(6, 1, figsize=(10, 12))
+
+        # Plot zeta_g
+        axes[0].plot(tmt_times, x_ephem[:, 0], label='Estimated')
+        axes[0].plot(tmt_times, tmt_states[:, 0], linestyle='--', label='true')
+        axes[0].set_ylabel('dζ_g (m)')
+        axes[0].legend()
+        axes[0].grid(True)
+
+        # Plot eta_g
+        axes[1].plot(tmt_times, x_ephem[:, 1], label='Estimated')
+        axes[1].plot(tmt_times, tmt_states[:, 1], linestyle='--', label='true')
+        axes[1].set_ylabel('dη_g (m)')
+        axes[1].legend()
+        axes[1].grid(True)
+
+        # Plot theta_g
+        axes[2].plot(tmt_times, x_ephem[:, 2], label='Estimated')
+        axes[2].plot(tmt_times, tmt_states[:, 2], linestyle='--', label='true')
+        axes[2].set_ylabel('dθ_g (rad)')
+        axes[2].legend()
+        axes[2].grid(True)
+
+        # Plot zeta_a
+        axes[3].plot(tmt_times, x_ephem[:, 3], label='Estimated')
+        axes[3].plot(tmt_times, tmt_states[:, 3], linestyle='--', label='true')
+        axes[3].set_ylabel('dζ_a (m)')
+        axes[3].legend()
+        axes[3].grid(True)
+
+        # Plot eta_a
+        axes[4].plot(tmt_times, x_ephem[:, 4], label='Estimated')
+        axes[4].plot(tmt_times, tmt_states[:, 4], linestyle='--', label='true')
+        axes[4].set_ylabel('dη_a (m)')
+        axes[4].legend()
+        axes[4].grid(True)
+
+        # Plot theta_a
+        axes[5].plot(tmt_times, x_ephem[:, 5], label='Estimated')
+        axes[5].plot(tmt_times, tmt_states[:, 5], linestyle='--', label='true')
+        axes[5].set_xlabel('Time (s)')
+        axes[5].set_ylabel('dθ_a (rad)')
+        axes[5].legend()
+        axes[5].grid(True)
+
 
     nees_sum = nees_sum / NUM_TESTS
 
@@ -315,6 +320,7 @@ def test_lkf_nees():
     axes.plot(tmt_times, nees_sum[:, 0], marker='o', linestyle="none", color='blue')
     axes.plot(tmt_times, np.ones(len(tmt_times)) * r1_chi2, linestyle='--', color='red')
     axes.plot(tmt_times, np.ones(len(tmt_times)) * r2_chi2, linestyle='--', color='red')
+    axes.grid(True)
 
 
     plt.tight_layout()
@@ -372,6 +378,10 @@ def test_lfk_nis():
     P_0 = np.eye(6) * 10
 
     nis_sum = np.zeros([NUM_TESTING_STEPS, 6])
+    # todo temp
+    tmt_times = []
+    y_ephem = []
+    tmt_measurement = []
     for _ in range(0, NUM_TESTS):
 
         ugv = ugv_dynamics.Dynamical_UGV(x_0[0:3])
@@ -394,11 +404,18 @@ def test_lfk_nis():
 
         lkf.propagate(tmt_measurement)
 
-        x_ephem = np.array(lkf.dx_ephem) + np.array(nominal_ephemeris)[1:NUM_TESTING_STEPS + 1]
+        y_ephem = np.array(lkf.dy_ephem) + np.array(nominal_measurements)[1:NUM_TESTING_STEPS]
+        # x_ephem = np.array(lkf.dx_ephem) + np.array(nominal_ephemeris)[1:NUM_TESTING_STEPS + 1]
+        H_ephem = np.array(lkf.H_ephem)
+        P_pre_ephem = np.array(lkf.P_pre_ephem)
 
-        for step, cov in enumerate(lkf.P_ephem):
-            nis_sum[step, :] += (x_ephem[step, :] - tmt_states[step, :]) @ np.linalg.inv(cov) @ np.transpose(
-                x_ephem[step, :] - tmt_states[step, :])
+        for step, (P_pre, H) in enumerate(zip(P_pre_ephem, H_ephem)):
+            diff = y_ephem[step,:] - np.transpose(tmt_measurement[:, step+1])
+            diff[0] = filters.wrap_angle(diff[0])
+            diff[2] = filters.wrap_angle(diff[2])
+
+            S = H @ P_pre @ np.transpose(H) + lkf.R
+            nis_sum[step, :] += (diff) @ np.linalg.inv(S) @ np.transpose(diff)
 
     nis_sum = nis_sum / NUM_TESTS
 
@@ -406,11 +423,51 @@ def test_lfk_nis():
     r1_chi2 = chi2.ppf(SIGNFICANCE_LEVEL / 2, 5 * NUM_TESTS) / NUM_TESTS
     r2_chi2 = chi2.ppf(1 - SIGNFICANCE_LEVEL / 2, 5 * NUM_TESTS) / NUM_TESTS
 
+    # todo: temp debugging plot
+    # Create figure with 6 subplots
+    fig, axes = plt.subplots(5, 1, figsize=(10, 12))
+
+    # Plot zeta_g
+    axes[0].plot(tmt_times[1:], y_ephem[:, 0], label='Estimated')
+    axes[0].plot(tmt_times, tmt_measurement[0, :], linestyle='--', label='true')
+    axes[0].set_ylabel('dζ_g (m)')
+    axes[0].legend()
+    axes[0].grid(True)
+
+    # Plot eta_g
+    axes[1].plot(tmt_times[1:], y_ephem[:, 1], label='Estimated')
+    axes[1].plot(tmt_times, tmt_measurement[1, :], linestyle='--', label='true')
+    axes[1].set_ylabel('dη_g (m)')
+    axes[1].legend()
+    axes[1].grid(True)
+
+    # Plot theta_g
+    axes[2].plot(tmt_times[1:], y_ephem[:, 2], label='Estimated')
+    axes[2].plot(tmt_times, tmt_measurement[2, :], linestyle='--', label='true')
+    axes[2].set_ylabel('dθ_g (rad)')
+    axes[2].legend()
+    axes[2].grid(True)
+
+    # Plot zeta_a
+    axes[3].plot(tmt_times[1:], y_ephem[:, 3], label='Estimated')
+    axes[3].plot(tmt_times, tmt_measurement[3, :], linestyle='--', label='true')
+    axes[3].set_ylabel('dζ_a (m)')
+    axes[3].legend()
+    axes[3].grid(True)
+
+    # Plot eta_a
+    axes[4].plot(tmt_times[1:], y_ephem[:, 4], label='Estimated')
+    axes[4].plot(tmt_times, tmt_measurement[4, :], linestyle='--', label='true')
+    axes[4].set_ylabel('dη_a (m)')
+    axes[4].legend()
+    axes[4].grid(True)
+
     fig, axes = plt.subplots(1, 1, figsize=(10, 12))
 
     axes.plot(tmt_times, nis_sum[:, 0], marker='o', linestyle="none", color='blue')
     axes.plot(tmt_times, np.ones(len(tmt_times)) * r1_chi2, linestyle='--', color='red')
     axes.plot(tmt_times, np.ones(len(tmt_times)) * r2_chi2, linestyle='--', color='red')
+    axes.grid(True)
 
     plt.tight_layout()
     plt.show()

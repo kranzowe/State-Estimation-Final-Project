@@ -4,18 +4,32 @@ import numpy as np
 from copy import deepcopy
 from src.combined_system import CombinedSystem
 
-def wrap_angle(angle):
+def wrap_angle(angles):
     """helper func to put an angle in rads to range [-pi, pi]"""
-    while angle > np.pi:
-        angle -= 2 * np.pi
-    while angle < -np.pi:
-        angle += 2 * np.pi
-    return angle
+    if np.isscalar(angles):
+        while angles > np.pi:
+            angles -= 2 * np.pi
+        while angles < -np.pi:
+            angles += 2 * np.pi
+    else:
+        for i, angle in enumerate(angles):
+            while angle > np.pi:
+                angle -= 2 * np.pi
+            while angle < -np.pi:
+                angle += 2 * np.pi
+
+            angles[i] = angle
+
+    return angles
 
 def angle_difference(angle1, angle2):
     """gives the smallest difference in angle1 - angle2 with wrapping considerations"""
     diff = angle1 - angle2
     return wrap_angle(diff)
+
+def angle_sum(angle1, angle2):
+    add = angle1 + angle2
+    return wrap_angle(add)
 
 
 # todo: bar matrices need k subscript and need to be evaled at x_star, u_star at each step before update and correct
@@ -57,7 +71,10 @@ class LKF():
         # ephemerides
         # need to save off time histories of dx
         self.dx_ephem = [dx_0]
+        self.dy_ephem = []
         self.P_ephem = [P_0]
+        self.P_pre_ephem = []
+        self.H_ephem = []
 
     def propagate(self, y_data):
         # initialize dx and P for first prediction step
@@ -75,7 +92,11 @@ class LKF():
             F_bar, G_bar = self.combined_system.get_dt_state_transition_matrices(self.dt, nominal_state, nominal_control)
             H_bar, Omega_bar = self.combined_system.get_dt_H_and_Omega(self.dt, nominal_state, nominal_control)
             self.update(F_bar, G_bar, H_bar, Omega_bar)
-            # todo: index correct spot
+
+            # get predicted meas disturbance
+            self.dy_ephem.append(H_bar @ self.dx_pre)
+            self.H_ephem.append(H_bar)
+            self.P_pre_ephem.append(self.P_pre)
 
             nominal_measurement = self.nominal_measurements[k]
             actual_measurement = y_data[:, k]
@@ -99,6 +120,9 @@ class LKF():
         # get y_nom from nominal trajectory
         # update dy and kalman gain matrix first
         dy = meas - nominal_measurement
+        # wrap bearing angles (indices 0 and 2 are bearing measurements)
+        dy[0] = angle_difference(meas[0], nominal_measurement[0])
+        dy[2] = angle_difference(meas[2], nominal_measurement[2])
         H_bar_t = np.transpose(H_bar)
         self.Kk = self.P_pre @ H_bar_t @ np.linalg.inv(H_bar @ self.P_pre @ H_bar_t + self.R)
 
