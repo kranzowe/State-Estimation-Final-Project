@@ -22,6 +22,7 @@ class Dynamical_UGV():
         
         #set the initial state
         self.current_state = initial_state
+        self.current_state_true = initial_state
         self.L = 0.5
 
     def update_nominal_state(self, t, x_0, control_nom):
@@ -100,7 +101,7 @@ class Dynamical_UGV():
         #   dt = scalar propagation time
 
         #solve the ivp 
-        result = solve_ivp(self.get_nl_d_state, [0, dt], self.current_state, args=(control,))    
+        result = solve_ivp(self.get_nl_d_state, [0, dt], self.current_state_true, args=(control,))
 
         theta = result.y[2][-1]
         if theta > math.pi:
@@ -108,13 +109,13 @@ class Dynamical_UGV():
         elif theta < -math.pi:
             theta += 2*math.pi
         #update the current system state
-        self.current_state = [result.y[0][-1], result.y[1][-1], theta]
+        self.current_state_true = [result.y[0][-1], result.y[1][-1], theta]
 
         if(process_noise):
             Q = self.get_process_noise_covariance(TRUTH_MODEL_PROCESS_NOISE, dt, control)
-
-            self.current_state = self.current_state + np.random.multivariate_normal(np.zeros([3]), Q)
-
+            self.current_state = self.current_state_true + np.linalg.cholesky(Q) @ np.random.multivariate_normal(np.zeros([3]), np.eye(3))
+        else:
+            self.current_state = self.current_state_true
 
 
     def _get_current_jacobian(self, x_nom, control):
@@ -137,15 +138,17 @@ class Dynamical_UGV():
 
     def get_process_noise_covariance(self, noise_covarience, dt, control, mapping=np.eye(3)):
 
-        A = (self._get_current_jacobian(self.current_state, control))[0:3, 0:3]
+        # A = (self._get_current_jacobian(self.current_state, control))[0:3, 0:3]
 
-        #use van loan's method the compute the dt process noise matrix Q
-        Z = np.vstack([np.hstack([-A, mapping@noise_covarience@np.transpose(mapping)]),
-                       np.hstack([np.zeros([3,3]), np.transpose(A)])])
+        # #use van loan's method the compute the dt process noise matrix Q
+        # Z = np.vstack([np.hstack([-A, mapping@noise_covarience@np.transpose(mapping)]),
+        #                np.hstack([np.zeros([3,3]), np.transpose(A)])])
         
-        Ze = expm(Z * dt)
+        # Ze = expm(Z * dt)
 
-        return np.transpose(Ze[3:6,3:6]) * Ze[0:3, 3:6]
+        # return np.transpose(Ze[3:6,3:6]) * Ze[0:3, 3:6]
+
+        return noise_covarience
 
 
     def get_nl_d_state(self, t = None, state = None, control = None):
