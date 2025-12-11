@@ -777,8 +777,8 @@ def test_lkf_comprehensive():
     fig7, axes7 = plt.subplots(6,1, figsize=(12, 14))
     state_labels = ['ζ_g (m)', 'η_g (m)', 'θ_g (rad)', 'ζ_a (m)', 'η_a (m)', 'θ_a (rad)']
     for i in range(6):
-        axes7[i].plot(single_times, single_error[:,i], "r-", label="State Error")
-        axes7[i].fill_between(single_times, single_error[:,i] - single_two_sigma[:,i], single_error[:,i] + single_two_sigma[:,i],  alpha=0.2, color='blue', label=f'±2σ')
+        axes7[i].plot(single_times[:-1], single_error[:,i], "r-", label="State Error")
+        axes7[i].fill_between(single_times[:-1], single_error[:,i] - single_two_sigma[:,i], single_error[:,i] + single_two_sigma[:,i],  alpha=0.2, color='blue', label=f'±2σ')
         axes7[i].set_ylabel(state_labels[i])
         axes7[i].legend(loc="upper right")
 
