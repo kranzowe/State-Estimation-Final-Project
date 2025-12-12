@@ -11,7 +11,8 @@ from src import filters
 import math
 from scipy.stats import chi2
 
-
+import torch
+from scipy.optimize import minimize
 import matplotlib.pyplot as plt
 
 NUM_TESTS = 3
@@ -951,7 +952,113 @@ def test_ekf_comprehensive():
     plt.show()
 
 
+def cost_of_Q(Q_chol):
+    '''finds the optimal Q to pass nees tests'''
+    
+    # Ensure Q is positive definite: Q = L·L^T
+    Q = Q_chol @ Q_chol.T
+    Q_np = np.array(Q.detach().tolist())
+    
+    # Same setup as test_ekf_comprehensive
+    x_0 = np.array([10, 0, math.pi/2, -60, 0, -math.pi/2])
+    control = np.array([2, -math.pi / 18, 12, math.pi/25])
+    dt = 0.1
+    
+    R_true = np.array([[0.0225,0,0,0,0],
+                        [0,64,0,0,0],
+                        [0,0,0.04,0,0],
+                        [0,0,0,36,0],
+                        [0,0,0,0,36]])
+    
+    P_0 = np.diag([1.0, 1.0, 0.01, 1.0, 1.0, 0.01])
+    
+    nees_list = []
+
+    for test_num in range(5):  # reduced a lot for speed
+        
+        x_0_truth = x_0 + np.random.multivariate_normal(np.zeros(6), P_0)
+        
+        ugv = ugv_dynamics.Dynamical_UGV(x_0_truth[0:3])
+        uav = uav_dynamics.Dynamical_UAV(x_0_truth[3:])
+        combo = combined_system.CombinedSystem(ugv, uav) 
+
+        tmt_times, tmt_states, tmt_measurement = combo.generate_truth_set(
+            dt, NUM_TESTING_STEPS, R_true, control[0:2], control[2:4], process_noise=True
+        )
+
+        ugv = ugv_dynamics.Dynamical_UGV(x_0[0:3])
+        uav = uav_dynamics.Dynamical_UAV(x_0[3:])
+        combo = combined_system.CombinedSystem(ugv, uav)
+
+        ekf = filters.EKF(dt, combo, control, Q_np, R_true, P_0, x_0)
+
+        tmt_measurement = np.insert(tmt_measurement, 0, np.zeros([5]), axis=1)
+        ekf.propagate(tmt_measurement)
+
+        x_ephem = np.array(ekf.x_ephem)
+
+        for step, cov in enumerate(ekf.P_ephem):
+            if step == 0:
+                continue
+
+            state_error = x_ephem[step,:] - tmt_states[step - 1,:]
+            
+            state_error[2] = filters.angle_difference(x_ephem[step,2], tmt_states[step-1,2])
+            state_error[5] = filters.angle_difference(x_ephem[step,5], tmt_states[step-1,5])
+            
+            nees = state_error @ np.linalg.inv(cov) @ state_error
+            nees_list.append(nees)
+
+    nees_tensor = torch.tensor(nees_list, dtype=torch.float32)
+    
+    expected_nees = 6.0
+    
+    r1_chi2 = chi2.ppf(SIGNFICANCE_LEVEL / 2, 6)
+    r2_chi2 = chi2.ppf(1 - SIGNFICANCE_LEVEL / 2, 6)
+    
+    loss_mean = (torch.mean(nees_tensor) - expected_nees)**2
+    
+    upper_violations = torch.relu(nees_tensor - r2_chi2)
+    lower_violations = torch.relu(r1_chi2 - nees_tensor)
+    loss_violations = torch.mean(upper_violations**2 + lower_violations**2)
+    
+    loss = loss_mean + 10.0 * loss_violations
+    
+    return loss
+
+
+def test_optimize_Q_via_nees():
+    from scipy.optimize import minimize
+    
+    # start far off so it has something to optimize
+    Q_diag = np.array([0.1, 0.1, 0.01, 0.1, 0.1, 0.01])
+    
+    def cost_wrapper(q_diag_log):
+        q_diag = np.exp(q_diag_log)
+        Q_chol = np.diag(np.sqrt(q_diag))
+        Q_chol_torch = torch.tensor(Q_chol, dtype=torch.float32)
+        
+        loss = cost_of_Q(Q_chol_torch)
+        print(f"  Q_diag: {q_diag}, Loss: {loss.item():.4f}")
+        return loss.item()
+    
+    result = minimize(
+        cost_wrapper, 
+        np.log(Q_diag),
+        method='Powell',
+        options={'maxiter': 10, 'disp': True}
+    )
+    
+    Q_diag_optimized = np.exp(result.x)
+    Q_optimized = np.diag(Q_diag_optimized)
+    
+    print("\nOptimized Q diagonal:", Q_diag_optimized)
+    print("Optimized Q:\n", Q_optimized)
+    
+    return Q_optimized
+
 if __name__ == "__main__":
-    test_ekf_comprehensive()
+    test_optimize_Q_via_nees()
+    #test_ekf_comprehensive()
     # R_estimated, R_given = test_estimate_R_from_data()
     # test_q_continuous_vs_discrete()
