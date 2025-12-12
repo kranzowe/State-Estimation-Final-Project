@@ -851,6 +851,20 @@ def test_ekf_comprehensive():
     single_error = np.array(single_error)
     single_two_sigma = np.array(single_two_sigma)
 
+    real_data_states = np.array(ekf_meas.x_ephem)
+    real_data_states_sigma = []
+    for cov in ekf_meas.P_ephem:
+        real_data_states_sigma.append([
+            math.sqrt(cov[0,0]) * 2,
+            math.sqrt(cov[1,1]) * 2,
+            math.sqrt(cov[2,2]) * 2,
+            math.sqrt(cov[3,3]) * 2,
+            math.sqrt(cov[4,4]) * 2,
+            math.sqrt(cov[5,5]) * 2,
+        ])
+    real_data_states_sigma = np.array(real_data_states_sigma)
+
+
     # ========================================================================
     # PLOTTING
     # ========================================================================
@@ -945,6 +959,17 @@ def test_ekf_comprehensive():
 
     axes7[4].set_xlabel('Time (s)')
     axes7[0].set_title(f'Truth Model States for EKF NEES / NIS Testing ')
+
+    fig8, axes8 = plt.subplots(6,1, figsize=(12, 14))
+    state_labels = ['ζ_g (m)', 'η_g (m)', 'θ_g (rad)', 'ζ_a (m)', 'η_a (m)', 'θ_a (rad)']
+    for i in range(6):
+        axes8[i].plot(t_vec_data, real_data_states[:-1,i], "r-", label="State Error")
+        axes8[i].fill_between(t_vec_data, real_data_states[:-1,i] - real_data_states_sigma[:-1,i], real_data_states[:-1,i] + real_data_states_sigma[:-1,i],  alpha=0.2, color='blue', label=f'±2σ')
+        axes8[i].set_ylabel(state_labels[i])
+        axes8[i].legend(loc="upper right")
+
+    axes8[5].set_xlabel('Time (s)')
+    axes8[0].set_title(f'EKF State Estimate on Observation Data Log')
 
 
     plt.tight_layout()
