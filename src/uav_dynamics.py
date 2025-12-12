@@ -107,26 +107,27 @@ class Dynamical_UAV():
 
     #propagate the current timestep by a timestep dt using the control input control
     def step_nl_propagation(self, control, dt, process_noise=False):
-        #Params:
-        #   controls = [va, phi_a]
-        #   dt = scalar propagation time
-
-        #solve the ivp 
-        result = solve_ivp(self.get_nl_d_state, [0, dt], self.current_state_true, args=(control,))
-
+        # Integrate from the CURRENT state (which may already have noise)
+        if process_noise:
+            start_state = self.current_state  # Use noisy state
+        else:
+            start_state = self.current_state_true  # Use clean state
+        
+        result = solve_ivp(self.get_nl_d_state, [0, dt], start_state, args=(control,))
+        
         theta = result.y[2][-1]
         if theta > math.pi:
             theta -= 2*math.pi
         elif theta < -math.pi:
             theta += 2*math.pi
-
-        #update the current system state
+        
+        # Update the deterministic trajectory
         self.current_state_true = [result.y[0][-1], result.y[1][-1], theta]
-
-        if(process_noise):
-            Q = self.get_process_noise_covariance(TRUTH_MODEL_PROCESS_NOISE, dt, control)
-
-            self.current_state = self.current_state + np.linalg.cholesky(Q) @ np.random.multivariate_normal(np.zeros([3]), np.eye(3))
+        
+        if process_noise:
+            Q_discrete = TRUTH_MODEL_PROCESS_NOISE * dt  # Scale by dt for discrete noise
+            noise = np.linalg.cholesky(Q_discrete) @ np.random.randn(3)
+            self.current_state = np.array([result.y[0][-1], result.y[1][-1], theta]) + noise
         else:
             self.current_state = self.current_state_true
 

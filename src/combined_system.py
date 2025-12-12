@@ -45,7 +45,7 @@ class CombinedSystem():
 
         return F, G
     
-    def get_dt_H_and_Omega(self, dt, x_nom, control_nom):
+    def get_dt_H(self, dt, x_nom, control_nom):
 
         # simplifying relations
         dx = x_nom[3] - x_nom[0]
@@ -75,9 +75,8 @@ class CombinedSystem():
         H[3, 3] = 1.0
         H[4, 4] = 1.0
 
-        Omega = np.eye(6)*dt
 
-        return H, Omega
+        return H
 
     def step_dt_states(self, F, G, control_perturb):
 
