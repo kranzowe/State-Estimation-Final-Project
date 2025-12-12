@@ -15,8 +15,8 @@ import torch
 from scipy.optimize import minimize
 import matplotlib.pyplot as plt
 
-NUM_TESTS = 3
-NUM_TESTING_STEPS = 100
+NUM_TESTS = 50
+NUM_TESTING_STEPS = 1000
 SIGNFICANCE_LEVEL = 0.01
 
 
@@ -692,12 +692,13 @@ def test_ekf_comprehensive():
                         [0,0,0.04,0,0],
                         [0,0,0,36,0],
                         [0,0,0,0,36]])
+
     Q_true = np.array([[0.001,0,0,0,0,0],
                         [0,0.001,0,0,0,0],
                         [0,0,0.01,0,0,0],
                         [0,0,0,0.001,0,0],
                         [0,0,0,0,0.001,0],
-                        [0,0,0,0,0,0.01]]) / 9
+                        [0,0,0,0,0,0.01]]) / 6
     
     P_0 = np.diag([1.0, 1.0, 0.01, 1.0, 1.0, 0.01])
     
@@ -1058,7 +1059,7 @@ def test_optimize_Q_via_nees():
     return Q_optimized
 
 if __name__ == "__main__":
-    test_optimize_Q_via_nees()
-    #test_ekf_comprehensive()
+    #test_optimize_Q_via_nees()
+    test_ekf_comprehensive()
     # R_estimated, R_given = test_estimate_R_from_data()
     # test_q_continuous_vs_discrete()
